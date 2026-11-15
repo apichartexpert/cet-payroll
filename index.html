@@ -450,7 +450,7 @@ function render(){
   document.querySelectorAll('.navbtn').forEach(b=>b.classList.toggle('on',b.dataset.v===VIEW));
   document.getElementById('viewtitle').textContent=VIEWS[VIEW];
   const el=document.getElementById('view');
-  if(!S.employees.length&&VIEW!=='set'&&VIEW!=='emp'){el.innerHTML=emptyHome();return;}
+  if(!S.employees.length&&!['set','emp','mpa'].includes(VIEW)){el.innerHTML=emptyHome();return;}
   ({dash:vDash,emp:vEmp,mpa:vMpa,run:vRun,pnd1:vPnd1,sso:vSso,bank:vBank,peak:vPeak,set:vSet}[VIEW])(el);
 }
 function emptyHome(){return `<div class="panel"><div class="bd"><div class="empty">
