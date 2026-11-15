@@ -1,0 +1,16 @@
+# payroll data must never be committed
+*.xlsx
+*.xlsm
+*.xls
+*.csv
+*.json
+*.txt
+*.pdf
+*.jpg
+*.jpeg
+*.png
+*.msg
+*.zip
+desktop.ini
+.DS_Store
+Thumbs.db

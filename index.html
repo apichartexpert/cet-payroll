@@ -1,0 +1,1949 @@
+<!DOCTYPE html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>CET Payroll</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<style>
+/* Layout: fixed sidebar workbench; period selector in topbar drives every module */
+:root{
+  --bg:#f4f7f5; --panel:#ffffff; --panel2:#eef3ef; --fg:#18251e; --muted:#5e7266;
+  --line:#dbe4dd; --accent:#15794b; --accent-fg:#ffffff; --accent-soft:#e2f1e8;
+  --amber:#996b14; --amber-soft:#f6ecd7; --red:#b23a2c; --red-soft:#f8e6e2;
+  --blue:#2d5f8a; --blue-soft:#e3edf5; --shadow:0 1px 3px rgba(23,37,30,.08);
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0f1512; --panel:#171f1a; --panel2:#1d2721; --fg:#e6efe9; --muted:#94a89b;
+  --line:#2a362e; --accent:#39b377; --accent-fg:#07130c; --accent-soft:#1b3328;
+  --amber:#dca53f; --amber-soft:#332a16; --red:#e2705f; --red-soft:#3a201b;
+  --blue:#6ba3d0; --blue-soft:#1a2733; --shadow:0 1px 3px rgba(0,0,0,.4);
+  color-scheme: dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0f1512; --panel:#171f1a; --panel2:#1d2721; --fg:#e6efe9; --muted:#94a89b;
+  --line:#2a362e; --accent:#39b377; --accent-fg:#07130c; --accent-soft:#1b3328;
+  --amber:#dca53f; --amber-soft:#332a16; --red:#e2705f; --red-soft:#3a201b;
+  --blue:#6ba3d0; --blue-soft:#1a2733; --shadow:0 1px 3px rgba(0,0,0,.4);
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font-family:'IBM Plex Sans Thai',-apple-system,'Segoe UI',sans-serif;font-size:14px;line-height:1.45}
+.num{font-variant-numeric:tabular-nums}
+#app{display:flex;min-height:100%}
+/* sidebar */
+#side{width:212px;flex:0 0 auto;background:var(--panel);border-right:1px solid var(--line);
+  padding:14px 10px calc(14px + env(safe-area-inset-bottom,0px)) max(10px,env(safe-area-inset-left,0px));
+  display:flex;flex-direction:column;gap:2px}
+#side .brand{padding:6px 10px 14px;display:flex;align-items:center;gap:9px}
+#side .brand .logo{width:32px;height:32px;border-radius:8px;background:var(--accent);color:var(--accent-fg);
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+#side .brand b{font-size:15px;display:block;line-height:1.1}
+#side .brand small{color:var(--muted);font-size:11px}
+.navbtn{display:flex;align-items:center;gap:9px;width:100%;text-align:left;border:0;background:none;color:var(--fg);
+  padding:8px 10px;border-radius:8px;cursor:pointer;font:inherit;font-weight:500}
+.navbtn:hover{background:var(--panel2)}
+.navbtn.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.navbtn .ic{width:18px;text-align:center;flex:0 0 auto}
+.navbtn .th{flex:1}
+.navbtn small{display:block;font-weight:400;color:var(--muted);font-size:10.5px;letter-spacing:.03em}
+.navbtn.on small{color:var(--accent)}
+#side .foot{margin-top:auto;padding:10px;color:var(--muted);font-size:11px;line-height:1.5}
+/* main */
+#main{flex:1;min-width:0;display:flex;flex-direction:column}
+#topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--panel);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px))}
+#topbar h1{font-size:16px;margin:0;font-weight:600;flex:1;min-width:120px}
+.period{display:flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:4px 6px}
+.period button{border:0;background:none;color:var(--fg);cursor:pointer;font-size:15px;padding:2px 7px;border-radius:6px}
+.period button:hover{background:var(--line)}
+.period .plabel{font-weight:600;min-width:110px;text-align:center}
+#savestat{font-size:11.5px;color:var(--muted)}
+#content{flex:1;padding:18px max(16px,env(safe-area-inset-right,0px)) calc(32px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));min-width:0}
+.page{max-width:1240px;margin:0 auto}
+h2{font-size:17px;margin:0 0 4px;text-wrap:balance}
+.sub{color:var(--muted);margin:0 0 16px;font-size:12.5px}
+/* cards */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;box-shadow:var(--shadow)}
+.card .k{font-size:11.5px;color:var(--muted);letter-spacing:.02em}
+.card .v{font-size:19px;font-weight:700;margin-top:2px}
+.card .s{font-size:11px;color:var(--muted);margin-top:2px}
+.card.acc{border-left:3px solid var(--accent)}
+/* panel + tables */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);margin-bottom:16px}
+.panel .hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 14px;border-bottom:1px solid var(--line)}
+.panel .hd h3{margin:0;font-size:14px;flex:1;min-width:140px}
+.panel .bd{padding:14px}
+.tblwrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th{font-size:11px;color:var(--muted);text-align:left;font-weight:600;letter-spacing:.03em;
+  padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;background:var(--panel)}
+td{padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:middle}
+tr:hover td{background:var(--panel2)}
+td.r,th.r{text-align:right}
+tfoot td{font-weight:700;background:var(--panel2);position:sticky;bottom:0}
+.name-cell{max-width:200px;overflow:hidden;text-overflow:ellipsis}
+/* inputs */
+input,select,textarea{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);
+  border-radius:7px;padding:5px 8px}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+input.cell{width:92px;text-align:right;padding:3px 6px;background:transparent;border-color:transparent}
+input.cell:hover,input.cell:focus{border-color:var(--line);background:var(--panel)}
+input.cell.ovr{border-color:var(--amber);background:var(--amber-soft);color:var(--amber);font-weight:600}
+input[type=file]{display:none}
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--panel);
+  color:var(--fg);border-radius:8px;padding:6px 12px;font:inherit;font-weight:500;cursor:pointer}
+.btn:hover{background:var(--panel2)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:600}
+.btn.pri:hover{filter:brightness(1.07)}
+.btn.warn{color:var(--red);border-color:var(--red)}
+.btn.sm{padding:3px 9px;font-size:12px;border-radius:7px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+/* chips */
+.chip{display:inline-flex;align-items:center;gap:4px;border-radius:99px;padding:2px 9px;font-size:11px;font-weight:600}
+.chip.g{background:var(--accent-soft);color:var(--accent)}
+.chip.a{background:var(--amber-soft);color:var(--amber)}
+.chip.r{background:var(--red-soft);color:var(--red)}
+.chip.b{background:var(--blue-soft);color:var(--blue)}
+.note{background:var(--blue-soft);border:1px solid var(--line);border-radius:9px;padding:10px 13px;font-size:12.5px;margin-bottom:14px}
+.note.warn{background:var(--amber-soft)}
+/* import page */
+.stepper{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:4px 0 16px}
+.stp{display:flex;gap:9px;align-items:flex-start;text-align:left;border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:10px;padding:10px;cursor:pointer;font:inherit;min-width:0}
+.stp .n{flex:0 0 auto;width:24px;height:24px;border-radius:50%;background:var(--panel2);color:var(--muted);display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:12px}
+.stp b{display:block;font-size:12.5px}.stp small{display:block;color:var(--muted);font-size:10.5px;line-height:1.3}
+.stp.done .n{background:var(--accent);color:var(--accent-fg)}
+.stp.cur{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.drop{border:2px dashed var(--accent);border-radius:14px;background:var(--accent-soft);padding:26px 18px;text-align:center;cursor:pointer;margin-bottom:12px;display:flex;flex-direction:column;gap:6px}
+.drop b{font-size:15px;color:var(--accent)}.drop span{font-size:12px;color:var(--muted)}
+.drop:hover,.drop:focus-visible{background:var(--panel2)}
+.fcards{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+.fcard{position:relative;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:10px 40px 10px 12px}
+.fcard .fname{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fcard .fmeta{font-size:12px;color:var(--muted);margin-top:3px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.fcard .fx{position:absolute;top:8px;right:8px}
+.pwrow{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}.pwrow input{flex:1;min-width:160px;max-width:280px}
+.sn{display:inline-flex;width:20px;height:20px;border-radius:50%;background:var(--accent);color:var(--accent-fg);align-items:center;justify-content:center;font-size:11px;margin-right:6px}
+.actionbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px solid var(--accent);border-radius:12px;background:var(--panel);padding:12px 14px;margin:6px 0 16px}
+.actionbar>div{flex:1;min-width:200px}.actionbar small{color:var(--muted)}
+.exports{display:flex;flex-wrap:wrap;gap:8px}
+#dropOverlay{position:fixed;inset:0;z-index:200;background:rgba(21,121,75,.18);display:flex;align-items:center;justify-content:center;pointer-events:none}
+#dropOverlay div{background:var(--panel);border:2px dashed var(--accent);border-radius:16px;padding:28px 40px;font-size:18px;font-weight:700;color:var(--accent)}
+@media (max-width:860px){.stepper{grid-template-columns:1fr 1fr}}
+/* checklist */
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.step{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--panel);cursor:pointer}
+.step:hover{border-color:var(--accent)}
+.step .n{width:22px;height:22px;border-radius:50%;background:var(--panel2);color:var(--muted);
+  display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-bottom:6px}
+.step.done .n{background:var(--accent);color:var(--accent-fg)}
+.step b{display:block;font-size:13px}
+.step small{color:var(--muted);font-size:11px}
+/* form grid */
+.fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px 14px}
+.fgrid label{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--muted);font-weight:600;min-width:0}
+.fgrid input,.fgrid select{width:100%}
+/* dialog */
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--fg);
+  padding:0;max-width:min(860px,94vw);width:860px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+dialog::backdrop{background:rgba(10,20,14,.45)}
+dialog .dhd{display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
+dialog .dhd h3{margin:0;font-size:15px;flex:1}
+dialog .dbd{padding:16px 18px;max-height:70vh;overflow:auto}
+dialog .dft{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.histgrid{display:grid;grid-template-columns:auto repeat(5,1fr);gap:3px 6px;font-size:11.5px;align-items:center}
+.histgrid input{width:100%;text-align:right;padding:2px 5px;font-size:11.5px}
+.histgrid .hh{font-weight:700;color:var(--muted);font-size:10.5px}
+.brk{font-size:12.5px}
+.brk table{font-size:12.5px}
+.searchbox{min-width:180px}
+.toast{position:fixed;bottom:calc(18px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);
+  background:var(--fg);color:var(--bg);border-radius:9px;padding:9px 18px;font-weight:600;z-index:99;box-shadow:var(--shadow)}
+.empty{padding:38px 20px;text-align:center;color:var(--muted)}
+.empty b{display:block;font-size:15px;color:var(--fg);margin-bottom:6px}
+.acct-grid{display:grid;grid-template-columns:110px 1fr;gap:8px 10px;align-items:center;max-width:560px}
+@media (max-width:860px){
+  #app{flex-direction:column}
+  #side{width:100%;flex-direction:row;align-items:center;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);
+    padding:8px max(12px,env(safe-area-inset-right,0px)) 8px max(12px,env(safe-area-inset-left,0px))}
+  #side .brand{padding:0 8px 0 0}
+  #side .brand small,#side .foot,.navbtn small{display:none}
+  .navbtn{white-space:nowrap;padding:6px 10px}
+  dialog{width:94vw}
+}
+@media (prefers-reduced-motion: no-preference){
+  .navbtn,.btn,.step{transition:background .12s,border-color .12s}
+}
+</style>
+
+<div id="app">
+  <nav id="side">
+    <div class="brand"><div class="logo">CE</div><div><b>CET Payroll</b><small>Constant Energy Services</small></div></div>
+    <button class="navbtn" data-v="dash"><span class="ic">◧</span><span class="th">ภาพรวม<small>Dashboard</small></span></button>
+    <button class="navbtn" data-v="emp"><span class="ic">▤</span><span class="th">พนักงาน<small>Employees</small></span></button>
+    <button class="navbtn" data-v="mpa"><span class="ic">⇪</span><span class="th">นำเข้าข้อมูล<small>Import · drag &amp; drop</small></span></button>
+    <button class="navbtn" data-v="run"><span class="ic">Σ</span><span class="th">คำนวณเงินเดือน<small>Payroll run</small></span></button>
+    <button class="navbtn" data-v="pnd1"><span class="ic">๑</span><span class="th">ภ.ง.ด.1<small>PND1 filing</small></span></button>
+    <button class="navbtn" data-v="sso"><span class="ic">✚</span><span class="th">ประกันสังคม<small>SSF / สปส.1-10</small></span></button>
+    <button class="navbtn" data-v="bank"><span class="ic">฿</span><span class="th">โอนเงินเดือน<small>Bank transfer</small></span></button>
+    <button class="navbtn" data-v="peak"><span class="ic">≡</span><span class="th">บันทึก PEAK<small>Journal entry</small></span></button>
+    <button class="navbtn" data-v="set"><span class="ic">⚙</span><span class="th">ตั้งค่า<small>Settings</small></span></button>
+    <div class="foot">ข้อมูลเก็บในเบราว์เซอร์เครื่องนี้เท่านั้น — สำรองข้อมูลได้ที่หน้า ตั้งค่า</div>
+  </nav>
+  <div id="main">
+    <div id="topbar">
+      <h1 id="viewtitle">ภาพรวม</h1>
+      <div class="period">
+        <button id="pprev" title="เดือนก่อนหน้า">‹</button>
+        <span class="plabel num" id="plabel"></span>
+        <button id="pnext" title="เดือนถัดไป">›</button>
+      </div>
+      <span id="savestat"></span>
+    </div>
+    <div id="content"><div class="page" id="view"></div></div>
+  </div>
+</div>
+
+<div id="dropOverlay" hidden><div>วางไฟล์เพื่อนำเข้า</div></div>
+<dialog id="dlgEmp"></dialog>
+<dialog id="dlgBrk"></dialog>
+
+<script>
+'use strict';
+/* ================= state ================= */
+const LSKEY='cet.payroll.v1';
+const THMONTH=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+const BRACKETS=[[150000,0],[300000,.05],[500000,.10],[750000,.15],[1000000,.20],[2000000,.25],[4000000,.30],[Infinity,.35]];
+const ALLOW_FIELDS=[
+ ['self','ส่วนตัว (60,000)'],['spouse','คู่สมรส'],['childNS','บุตรไม่ศึกษา'],['childS','บุตรกำลังศึกษา'],
+ ['parent','บิดามารดา'],['lifeIns','เบี้ยประกันชีวิต/สุขภาพ'],['rmfLtf','RMF / LTF / กองทุนลดหย่อน'],
+ ['ssfEsg','SSF / ThaiESG'],['special','ลดหย่อนพิเศษ'],['housing','ดอกเบี้ยบ้าน'],['donation','เงินบริจาค']];
+
+function defaultState(){return {
+  company:{nameTH:'บริษัท คอนสแตนท์ เอ็นเนอร์ยี่ เซอร์วิสเซส (ไทยแลนด์) จำกัด',nameEN:'Constant Energy Services (Thailand) Co., Ltd.',
+    taxIdCo:'0105562203030',ssoAccount:'',branch:'0',payBankAcct:'',payBankName:'ธนาคารกรุงเทพ (BBL)',
+    bblName:'CET',remitAcct:'',remitName:''},
+  settings:{ssoRate:5,ssoCeil:17500,ssoFloor:1650,whtMethod:'level',whtRound:'baht',
+    accounts:{
+      salaryExp:{code:'530101',name:'เงินเดือน ค่าจ้าง'},
+      ssoExp:{code:'530104',name:'เงินสมทบประกันสังคม กองทุนทดแทน'},
+      pfExp:{code:'530105',name:'เงินสมทบกองทุนสำรองเลี้ยงชีพ'},
+      whtPay:{code:'215201',name:'ภ.ง.ด.1 ค้างจ่าย'},
+      ssoPay:{code:'215501',name:'ประกันสังคมค้างจ่าย'},
+      pfPay:{code:'212302',name:'กองทุนสำรองเลี้ยงชีพค้างจ่าย'},
+      loanPay:{code:'212309',name:'เงินกู้ กยศ. รอนำส่ง'},
+      salPay:{code:'212301',name:'เงินเดือนค้างจ่าย'},
+      bank:{code:'111301',name:'ธนาคาร - บัญชีออมทรัพย์ (BBL)'}
+    }},
+  historyYear:2026,historyThroughMonth:0,
+  employees:[],runs:{}
+};}
+let S=defaultState();
+try{const raw=localStorage.getItem(LSKEY);if(raw){const p=JSON.parse(raw);S=Object.assign(defaultState(),p);
+  S.settings=Object.assign(defaultState().settings,p.settings||{});S.settings.accounts=Object.assign(defaultState().settings.accounts,(p.settings||{}).accounts||{});
+  S.company=Object.assign(defaultState().company,p.company||{});}}catch(e){}
+function migrate(){
+  if(!S.company.taxIdCo)S.company.taxIdCo='0105562203030';
+  if((S.v||0)<4){
+    S.settings.whtMethod='level';
+    for(const run of Object.values(S.runs||{})){if(run.status==='locked')continue;
+      for(const r of Object.values(run.rows||{})){if(r.studentLoan===0)r.studentLoan=null;if(r.incentive===0)r.incentive=null;}}
+    S.v=4;
+  }
+}
+migrate();
+let saveTimer=null;
+function save(){try{localStorage.setItem(LSKEY,JSON.stringify(S));setStat('บันทึกแล้ว ✓');}catch(e){setStat('⚠ บันทึกไม่สำเร็จ (พื้นที่เบราว์เซอร์)');}}
+function queueSave(){setStat('กำลังบันทึก…');clearTimeout(saveTimer);saveTimer=setTimeout(save,400);}
+function setStat(t){document.getElementById('savestat').textContent=t;}
+
+/* period */
+const now=new Date();
+let P={y:now.getFullYear(),m:now.getMonth()+1};
+try{const pp=sessionStorage.getItem('cet.period');if(pp){const[a,b]=pp.split('-').map(Number);if(a&&b){P={y:a,m:b};}}}catch(e){}
+function pkey(){return P.y+'-'+String(P.m).padStart(2,'0');}
+function plabel(){document.getElementById('plabel').textContent=THMONTH[P.m-1]+' '+P.y;}
+function shiftP(d){P.m+=d;if(P.m<1){P.m=12;P.y--;}if(P.m>12){P.m=1;P.y++;}try{sessionStorage.setItem('cet.period',P.y+'-'+P.m);}catch(e){}plabel();render();}
+
+/* ================= helpers ================= */
+const fmt=n=>(n==null||isNaN(n))?'–':Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmt0=n=>(n==null||isNaN(n))?'–':Number(n).toLocaleString('en-US',{maximumFractionDigits:0});
+const num=v=>{const n=parseFloat(String(v==null?'':v).replace(/,/g,''));return isNaN(n)?0:n;};
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const digits=s=>String(s||'').replace(/\D/g,'');
+function toast(t){const d=document.createElement('div');d.className='toast';d.textContent=t;document.body.appendChild(d);setTimeout(()=>d.remove(),2600);}
+function splitName(full){ // "Mr. Somchai Jaidee" -> {title,first,last}
+  let s=String(full||'').trim(),title='';
+  const en=s.match(/^(Mrs|Miss|Ms|Mr|Dr)(?:\.\s*|\s+)(.+)$/i);
+  const th=s.match(/^(นางสาว|นาง|นาย|น\.ส\.?)\s*(.+)$/);
+  if(en){title=en[1];s=en[2];}else if(th){title=th[1];s=th[2];}
+  const parts=s.trim().split(/\s+/);const first=parts.shift()||'';const last=parts.join(' ');
+  return{title,first,last};
+}
+
+/* run access */
+function getRun(create){let r=S.runs[pkey()];if(!r&&create){r={status:'draft',payDate:defaultPayDate(),rows:{}};S.runs[pkey()]=r;}return r;}
+function defaultPayDate(){const last=new Date(P.y,P.m,0).getDate();return P.y+'-'+String(P.m).padStart(2,'0')+'-'+String(Math.min(28,last)).padStart(2,'0');}
+const blankRow=()=>({ot:0,incentive:null,otherAdd:0,studentLoan:null,otherDed:0,paidAdvance:0,whtOverride:null,ssoOverride:null,pfOverride:null,salaryOverride:null,exclude:false});
+function rowOf(run,code){if(!run.rows[code])run.rows[code]=blankRow();return run.rows[code];}
+function activeEmps(){return S.employees.filter(e=>{
+  if(e.status==='resigned'&&e.resignYM){const[ry,rm]=e.resignYM.split('-').map(Number);if(P.y>ry||(P.y===ry&&P.m>rm))return false;}
+  if(e.startYM){const[sy,sm]=e.startYM.split('-').map(Number);if(P.y<sy||(P.y===sy&&P.m<sm))return false;}
+  return true;}).sort((a,b)=>a.code.localeCompare(b.code));}
+
+/* ================= tax engine ================= */
+function taxOn(net){let t=0,prev=0;for(const[cap,rate]of BRACKETS){if(net>prev)t+=(Math.min(net,cap)-prev)*rate;prev=cap;if(net<=cap)break;}return Math.max(0,t);}
+const r2=x=>Math.round((x+Number.EPSILON)*100)/100;
+const ym=(y,m)=>y+'-'+String(m).padStart(2,'0');
+function ssoOf(emp,salary){const st=S.settings;if(emp.ssoExempt)return 0;const base=Math.min(Math.max(salary,0)<st.ssoFloor?st.ssoFloor:salary,st.ssoCeil);
+  return salary>0?Math.round(base*st.ssoRate/100):0;}
+/* PF is rounded up to the whole baht, as on the CET payroll register */
+function pfOf(emp,salary){return Math.ceil(r2(salary*(num(emp.pfRate))/100));}
+function pfErOf(emp,salary){const rate=emp.pfErRate!=null&&emp.pfErRate!==''?num(emp.pfErRate):num(emp.pfRate);return Math.ceil(r2(salary*rate/100));}
+function recurAmt(emp,y,m){const k=ym(y,m);let t=0;
+  for(const it of emp.recurring||[]){if(!num(it.amount))continue;if(it.fromYM&&k<it.fromYM)continue;if(it.toYM&&k>it.toYM)continue;t+=num(it.amount);}return t;}
+const isSet=v=>v!=null&&v!=='';
+function incAmt(emp,r,y,m){return r&&isSet(r.incentive)?num(r.incentive):recurAmt(emp,y,m);}
+function loanAmt(emp,r){return r&&isSet(r.studentLoan)?num(r.studentLoan):num(emp.loanMonthly);}
+function oneOff(emp,r,y,m){return (r?num(r.ot)+num(r.otherAdd):0)+incAmt(emp,r,y,m);}
+function lastEmployedMonth(emp,y){if(emp.resignYM){const[ry,rm]=emp.resignYM.split('-').map(Number);if(ry===y)return rm;}return 12;}
+
+/* a month's actuals for an employee: a locked run first, then imported actuals, then a draft run */
+function monthData(emp,y,m){
+  const run=S.runs[ym(y,m)];
+  const row=run&&run.rows[emp.code]&&!run.rows[emp.code].exclude?run.rows[emp.code]:null;
+  const fromRun=()=>{const sal=row.salaryOverride!=null?row.salaryOverride:emp.salary;const calc=calcRow(emp,row,y,m,false);
+    return{income:sal,other:oneOff(emp,row,y,m),wht:calc.wht,sso:calc.sso,pf:calc.pf,src:'run'};};
+  if(row&&run.status==='locked')return fromRun();
+  if(y===S.historyYear&&emp.history2026&&m<=S.historyThroughMonth){
+    const h=emp.history2026;const g=(o)=>o&&o[m]!=null?num(o[m]):(o&&o[String(m)]!=null?num(o[String(m)]):0);
+    return{income:g(h.income),other:g(h.other),wht:g(h.wht),sso:g(h.ssf),pf:g(h.pf),src:'hist'};
+  }
+  if(row)return fromRun();
+  return null;
+}
+function annualTax(emp,annReg,annOther,annSSO,annPF){
+  const st=S.settings;const gross=annReg+annOther;
+  const expense=Math.min(gross*0.5,100000);
+  const A=emp.allowances||{};
+  let allow=num(A.self)||60000;
+  allow+=num(A.spouse)+num(A.childNS)+num(A.childS)+num(A.parent)+Math.min(num(A.lifeIns),100000)
+        +num(A.rmfLtf)+num(A.ssfEsg)+num(A.special)+Math.min(num(A.housing),100000);
+  allow+=Math.min(annSSO,st.ssoCeil*12*st.ssoRate/100);
+  allow+=annPF;
+  const beforeDonate=Math.max(0,gross-expense-allow);
+  const donate=Math.min(num(A.donation),beforeDonate*0.10);
+  const taxable=Math.max(0,beforeDonate-donate);
+  return{gross,expense,allow,donate,taxable,tax:r2(taxOn(taxable))};
+}
+/* WHT for employee for a month given that month's run row r.
+   level  : regular WHT held at a level amount; one-off income taxed at its marginal rate in the month paid;
+            December (or the last month employed) withholds whatever is left of the annual tax.
+   catchup: (annual tax - withheld YTD) / remaining months.
+   std12  : regular tax / 12 + share of tax on other income. */
+function computeWHT(emp,r,y,m){
+  const st=S.settings;
+  const curSal=r&&r.salaryOverride!=null?num(r.salaryOverride):emp.salary;
+  const curOther=oneOff(emp,r,y,m);
+  let annReg=0,annOther=0,annSSO=0,annPF=0,whtYTD=0;
+  const months=[],gaps=[];
+  for(let mm=1;mm<=12;mm++){
+    if(mm<m){
+      const d=monthData(emp,y,mm);
+      if(d){annReg+=d.income;annOther+=d.other;annSSO+=d.sso;annPF+=d.pf;whtYTD+=d.wht;months.push({m:mm,inc:d.income,oth:d.other,wht:d.wht,src:d.src});}
+      else{months.push({m:mm,inc:0,oth:0,wht:0,src:'-'});if(isEmployed(emp,y,mm)&&!(y===S.historyYear&&emp.history2026&&mm<=S.historyThroughMonth))gaps.push(mm);}
+    }else{
+      const inc=mm===m?curSal:(isEmployed(emp,y,mm)?curSal:0);
+      const oth=mm===m?curOther:0;
+      const sso=inc>0?ssoOf(emp,inc):0;const pf=inc>0?pfOf(emp,inc):0;
+      annReg+=inc;annOther+=oth;annSSO+=sso;annPF+=pf;
+      months.push({m:mm,inc,oth,wht:null,src:mm===m?'cur':'proj'});
+    }
+  }
+  const all=annualTax(emp,annReg,annOther,annSSO,annPF);
+  const excl=annualTax(emp,annReg,annOther-curOther,annSSO,annPF);
+  const taxReg=annualTax(emp,annReg,0,annSSO,annPF).tax;
+  const remaining=12-m+1;
+  const roundW=w=>st.whtRound==='baht'?Math.round(w):st.whtRound==='bahtUp'?Math.ceil(w):r2(w);
+  let wht,level=null,extra=0,how;
+  if(st.whtMethod==='level'){
+    extra=r2(all.tax-excl.tax);
+    if(m>=lastEmployedMonth(emp,y)){wht=r2(Math.max(0,all.tax-whtYTD));how='plug';}
+    else{
+      const lv=emp.whtLevel&&emp.whtLevel[y];
+      if(lv&&Math.abs(num(lv.base)-curSal)<0.005){level=num(lv.amt);how='level';}
+      else{level=roundW(Math.max(0,(excl.tax-whtYTD)/remaining));how='relevel';}
+      wht=r2(Math.max(0,level+extra));
+    }
+  }else if(st.whtMethod==='catchup'){wht=roundW(Math.max(0,(all.tax-whtYTD)/remaining));how='catchup';}
+  else{wht=roundW(taxReg/12+Math.max(0,all.tax-taxReg)*(curOther>0?(curOther/Math.max(annOther,curOther)):0));how='std12';}
+  return{wht,detail:{annReg,annOther,gross:all.gross,expense:all.expense,allow:all.allow,donate:all.donate,taxableAll:all.taxable,
+    taxAll:all.tax,taxExcl:excl.tax,taxReg,whtYTD,remaining,annSSO,annPF,months,gaps,level,extra,how,curSal,curOther}};
+}
+function isEmployed(emp,y,m){
+  if(emp.resignYM){const[ry,rm]=emp.resignYM.split('-').map(Number);if(y>ry||(y===ry&&m>rm))return false;}
+  if(emp.startYM){const[sy,sm]=emp.startYM.split('-').map(Number);if(y<sy||(y===sy&&m<sm))return false;}
+  return true;
+}
+/* full row calc */
+function calcRow(emp,r,y,m,withDetail){
+  const sal=r&&r.salaryOverride!=null?num(r.salaryOverride):emp.salary;
+  const inc=incAmt(emp,r,y,m);
+  const other=oneOff(emp,r,y,m);
+  const total=sal+other;
+  const sso=r&&r.ssoOverride!=null?num(r.ssoOverride):ssoOf(emp,sal);
+  const pf=r&&r.pfOverride!=null?num(r.pfOverride):pfOf(emp,sal);
+  let wht,detail=null;
+  if(r&&r.whtOverride!=null){wht=num(r.whtOverride);}
+  else{const c=computeWHT(emp,r,y,m);wht=c.wht;detail=c.detail;}
+  if(withDetail&&!detail){const c=computeWHT(emp,r,y,m);detail=c.detail;}
+  const loan=loanAmt(emp,r);const oded=r?num(r.otherDed):0;const adv=r?num(r.paidAdvance):0;
+  const ded=r2(wht+sso+pf+loan+oded);
+  const net=r2(total-ded);
+  return{sal,inc,other,total,wht,sso,pf,loan,oded,ded,net,adv,transfer:r2(net-adv),detail};
+}
+function runTotals(){
+  const run=getRun(false);const emps=activeEmps();const out={rows:[],gross:0,sal:0,other:0,wht:0,sso:0,ssoEr:0,pf:0,pfEr:0,pfErCalc:0,loan:0,oded:0,net:0,transfer:0,count:0};
+  if(!emps.length)return out;
+  for(const e of emps){
+    const r=run?run.rows[e.code]:null;
+    if(r&&r.exclude)continue;
+    const c=calcRow(e,r||{},P.y,P.m,false);
+    const ssoEr=r&&r.ssoOverride!=null?num(r.ssoOverride):ssoOf(e,c.sal);
+    const pfEr=pfErOf(e,c.sal);
+    out.rows.push({e,r,c,ssoEr,pfEr});
+    out.count++;out.gross+=c.total;out.sal+=c.sal;out.other+=c.other;out.wht+=c.wht;out.sso+=c.sso;out.ssoEr+=ssoEr;
+    out.pf+=c.pf;out.pfErCalc+=pfEr;out.loan+=c.loan;out.oded+=c.oded;out.net+=c.net;out.transfer+=c.transfer;
+  }
+  out.pfEr=run&&isSet(run.pfErTotal)?num(run.pfErTotal):out.pfErCalc;
+  for(const k of['gross','sal','other','wht','sso','ssoEr','pf','pfEr','pfErCalc','loan','oded','net','transfer'])out[k]=r2(out[k]);
+  return out;
+}
+
+/* ================= downloads ================= */
+let DL=null;window.claude?.use?.('downloads')?.then(d=>{DL=d;}).catch(()=>{});
+async function saveFile(filename,data){
+  if(!DL){
+    if(window.claude){toast('การดาวน์โหลดยังไม่พร้อมในหน้านี้ — ลองอีกครั้งในอีกสักครู่');return;}
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:'application/octet-stream'}));a.download=filename;
+    document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},2000);toast('บันทึกไฟล์ '+filename+' แล้ว');return;
+  }
+  try{await DL.save({filename,data});toast('บันทึกไฟล์ '+filename+' แล้ว');}
+  catch(e){if(e&&e.code==='declined')return;toast('ดาวน์โหลดไม่สำเร็จ: '+(e&&e.message||e));}
+}
+function aoaToXlsx(sheets){ // [{name, aoa, widths}]
+  const wb=XLSX.utils.book_new();
+  for(const s of sheets){const ws=XLSX.utils.aoa_to_sheet(s.aoa);if(s.widths)ws['!cols']=s.widths.map(w=>({wch:w}));XLSX.utils.book_append_sheet(wb,ws,s.name);}
+  return XLSX.write(wb,{type:'array',bookType:'xlsx'});
+}
+function csvOf(aoa){const bom='﻿';return bom+aoa.map(r=>r.map(v=>{v=String(v==null?'':v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}).join(',')).join('\r\n');}
+
+/* ================= views ================= */
+const VIEWS={dash:'ภาพรวม',emp:'พนักงาน',mpa:'นำเข้าข้อมูล',run:'คำนวณเงินเดือน',pnd1:'ภ.ง.ด.1',sso:'ประกันสังคม',bank:'โอนเงินเดือน',peak:'บันทึกบัญชี PEAK',set:'ตั้งค่า'};
+let VIEW='dash';
+function go(v){VIEW=v;render();}
+function render(){
+  plabel();
+  document.querySelectorAll('.navbtn').forEach(b=>b.classList.toggle('on',b.dataset.v===VIEW));
+  document.getElementById('viewtitle').textContent=VIEWS[VIEW];
+  const el=document.getElementById('view');
+  if(!S.employees.length&&VIEW!=='set'&&VIEW!=='emp'){el.innerHTML=emptyHome();return;}
+  ({dash:vDash,emp:vEmp,mpa:vMpa,run:vRun,pnd1:vPnd1,sso:vSso,bank:vBank,peak:vPeak,set:vSet}[VIEW])(el);
+}
+function emptyHome(){return `<div class="panel"><div class="bd"><div class="empty">
+  <b>เริ่มต้นใช้งาน CET Payroll</b>
+  ยังไม่มีข้อมูลพนักงาน — นำเข้าไฟล์ seed (cet-payroll-seed.json) หรือเพิ่มพนักงานเองได้ที่หน้า พนักงาน<br><br>
+  <button class="btn pri" onclick="go('mpa')">ไปหน้านำเข้าข้อมูล</button>
+  <button class="btn" onclick="go('emp')">ไปหน้าพนักงาน</button>
+  </div></div></div>`;}
+
+/* ---------- dashboard ---------- */
+function vDash(el){
+  const t=runTotals();const run=getRun(false);
+  const locked=run&&run.status==='locked';
+
+  el.innerHTML=`
+  <h2>งวดเงินเดือน ${THMONTH[P.m-1]} ${P.y} ${locked?'<span class="chip g">ปิดงวดแล้ว</span>':run?'<span class="chip a">ฉบับร่าง</span>':'<span class="chip b">ยังไม่เริ่ม</span>'}</h2>
+  <p class="sub">${esc(S.company.nameTH)} · พนักงานในงวดนี้ ${t.count} คน</p>
+  <div class="cards">
+    <div class="card acc"><div class="k">เงินได้รวม (Gross)</div><div class="v num">${fmt(t.gross)}</div><div class="s">เงินเดือน ${fmt0(t.sal)} + อื่น ๆ ${fmt0(t.other)}</div></div>
+    <div class="card"><div class="k">ภาษีหัก ณ ที่จ่าย (ภ.ง.ด.1)</div><div class="v num">${fmt(t.wht)}</div><div class="s">นำส่งสรรพากร</div></div>
+    <div class="card"><div class="k">ประกันสังคม</div><div class="v num">${fmt(t.sso+t.ssoEr)}</div><div class="s">ลูกจ้าง ${fmt0(t.sso)} + นายจ้าง ${fmt0(t.ssoEr)}</div></div>
+    <div class="card"><div class="k">กองทุนสำรองเลี้ยงชีพ</div><div class="v num">${fmt(t.pf+t.pfEr)}</div><div class="s">ลูกจ้าง ${fmt0(t.pf)} + นายจ้าง ${fmt0(t.pfEr)}</div></div>
+    <div class="card acc"><div class="k">ยอดโอนสุทธิ</div><div class="v num">${fmt(t.transfer)}</div><div class="s">หลังหักจ่ายล่วงหน้า</div></div>
+  </div>
+  <div class="panel"><div class="hd"><h3>ขั้นตอนประจำงวด</h3><button class="btn pri" onclick="go('mpa')">เริ่ม: ลากไฟล์เดือนนี้มาวาง</button></div><div class="bd">${stepperHtml()}</div></div>
+  ${dashWarnings()}`;
+}
+function dashWarnings(){
+  const miss=activeEmps().filter(e=>!/^\d{13}$/.test(digits(e.taxId)));
+  const missAcct=activeEmps().filter(e=>digits(e.bankAcct).length<10);
+  let h='';
+  if(miss.length)h+=`<div class="note warn">⚠ พนักงาน ${miss.length} คนยังไม่มีเลขประจำตัวผู้เสียภาษี 13 หลัก (จำเป็นสำหรับใบแนบ ภ.ง.ด.1): ${miss.slice(0,8).map(e=>esc(e.code)).join(', ')}${miss.length>8?' …':''} — แก้ไขได้ที่หน้า พนักงาน</div>`;
+  if(missAcct.length)h+=`<div class="note warn">⚠ เลขบัญชีธนาคารอาจไม่ครบถ้วน ${missAcct.length} คน: ${missAcct.slice(0,8).map(e=>esc(e.code)).join(', ')}${missAcct.length>8?' …':''}</div>`;
+  if(!S.company.taxIdCo)h+=`<div class="note">กรอกเลขประจำตัวผู้เสียภาษีของบริษัท และเลขที่บัญชีนายจ้าง สปส. ได้ที่หน้า <a href="#" onclick="go('set');return false">ตั้งค่า</a> เพื่อให้ไฟล์ยื่นแบบสมบูรณ์</div>`;
+  return h;
+}
+
+/* ---------- employees ---------- */
+let empSearch='';
+function vEmp(el){
+  const list=S.employees.filter(e=>{const q=empSearch.toLowerCase();return !q||e.code.toLowerCase().includes(q)||String(e.name).toLowerCase().includes(q)||String(e.dept).toLowerCase().includes(q);})
+    .sort((a,b)=>a.code.localeCompare(b.code));
+  el.innerHTML=`
+  <h2>ทะเบียนพนักงาน</h2>
+  <p class="sub">${S.employees.length} คน · แตะรายชื่อเพื่อแก้ไขข้อมูล เงินเดือน อัตรา PF และค่าลดหย่อนภาษี</p>
+  <div class="panel"><div class="hd">
+    <h3>รายชื่อ</h3>
+    <input class="searchbox" id="empq" placeholder="ค้นหา รหัส / ชื่อ / แผนก" value="${esc(empSearch)}">
+    <button class="btn" onclick="go('mpa')">นำเข้า…</button>
+    <button class="btn" onclick="exportEmpXlsx()">ส่งออก Excel</button>
+    <button class="btn pri" onclick="editEmp(null)">+ เพิ่มพนักงาน</button>
+  </div>
+  <div class="tblwrap"><table><thead><tr>
+    <th>รหัส</th><th>ชื่อ-สกุล</th><th>ตำแหน่ง</th><th class="r">เงินเดือน</th><th class="r">PF %</th>
+    <th>เลขผู้เสียภาษี</th><th>บัญชีธนาคาร</th><th>สถานะ</th></tr></thead><tbody>
+  ${list.map(e=>`<tr style="cursor:pointer" onclick="editEmp('${esc(e.code)}')">
+    <td class="num">${esc(e.code)}</td><td class="name-cell">${esc(e.name)}</td><td class="name-cell">${esc(e.position||'')}</td>
+    <td class="r num">${fmt(e.salary)}</td><td class="r num">${e.pfRate||0}</td>
+    <td class="num">${/^\d{13}$/.test(digits(e.taxId))?esc(e.taxId):'<span class="chip r">ไม่ครบ 13 หลัก</span>'}</td>
+    <td class="num">${esc(e.bankAcct||'')}</td>
+    <td>${e.status==='resigned'?'<span class="chip r">ลาออก '+esc(e.resignYM||'')+'</span>':'<span class="chip g">ทำงาน</span>'}</td></tr>`).join('')||'<tr><td colspan="8"><div class="empty">ยังไม่มีพนักงาน — นำเข้าไฟล์ seed หรือกด + เพิ่มพนักงาน</div></td></tr>'}
+  </tbody></table></div></div>`;
+  const q=document.getElementById('empq');q.addEventListener('input',()=>{empSearch=q.value;const pos=q.selectionStart;vEmp(el);const q2=document.getElementById('empq');q2.focus();q2.setSelectionRange(pos,pos);});
+}
+function exportEmployees(){
+  const data=JSON.stringify({type:'cet-payroll-seed',version:1,generated:new Date().toISOString().slice(0,10),
+    company:S.company,historyYear:S.historyYear,historyThroughMonth:S.historyThroughMonth,employees:S.employees},null,1);
+  saveFile('cet-payroll-employees.json',data);
+}
+window.editEmp=function(code){
+  const dlg=document.getElementById('dlgEmp');
+  const e=code?S.employees.find(x=>x.code===code):{code:'',name:'',salary:0,pfRate:0,bankAcct:'',taxId:'',position:'',dept:'',email:'',status:'active',allowances:{self:60000}};
+  const A=e.allowances||{};
+  const hist=e.history2026||{};
+  const histRows=[];
+  for(let m=1;m<=12;m++){const g=k=>{const o=hist[k]||{};return o[m]!=null?o[m]:(o[String(m)]!=null?o[String(m)]:'');};
+    histRows.push(`<div class="hh" style="text-align:right">${THMONTH[m-1].slice(0,3)}</div>`+
+      ['income','other','wht','ssf','pf'].map(k=>`<input data-h="${k}.${m}" value="${g(k)}">`).join(''));}
+  dlg.innerHTML=`
+  <div class="dhd"><h3>${code?esc(code)+' · '+esc(e.name):'เพิ่มพนักงานใหม่'}</h3>
+    <button class="btn sm" onclick="document.getElementById('dlgEmp').close()">ปิด ✕</button></div>
+  <div class="dbd">
+    <div class="fgrid">
+      <label>รหัสพนักงาน<input id="f_code" value="${esc(e.code)}" ${code?'readonly':''}></label>
+      <label>ชื่อ-สกุล (ตามบัตร)<input id="f_name" value="${esc(e.name)}"></label>
+      <label>เลขประจำตัวผู้เสียภาษี (13 หลัก)<input id="f_taxId" value="${esc(e.taxId||'')}" maxlength="17"></label>
+      <label>ตำแหน่ง<input id="f_position" value="${esc(e.position||'')}"></label>
+      <label>แผนก<input id="f_dept" value="${esc(e.dept||'')}"></label>
+      <label>อีเมล<input id="f_email" value="${esc(e.email||'')}"></label>
+      <label>เงินเดือน (บาท/เดือน)<input id="f_salary" value="${e.salary||0}"></label>
+      <label>อัตรา PF ลูกจ้าง (%)<input id="f_pfRate" value="${e.pfRate||0}"></label>
+      <label>บัญชีธนาคาร (BBL)<input id="f_bankAcct" value="${esc(e.bankAcct||'')}"></label>
+      <label>เริ่มงาน (YYYY-MM)<input id="f_startYM" value="${esc(e.startYM||'')}" placeholder="2024-05"></label>
+      <label>สถานะ<select id="f_status"><option value="active" ${e.status!=='resigned'?'selected':''}>ทำงานอยู่</option><option value="resigned" ${e.status==='resigned'?'selected':''}>ลาออก</option></select></label>
+      <label>เดือนสุดท้าย (YYYY-MM)<input id="f_resignYM" value="${esc(e.resignYM||'')}" placeholder="2026-06"></label>
+      <label>อัตรา PF นายจ้าง (%) — เว้นว่าง = เท่าลูกจ้าง<input id="f_pfErRate" value="${isSet(e.pfErRate)?e.pfErRate:''}"></label>
+      <label>หัก กยศ. ต่อเดือน (บาท)<input id="f_loanMonthly" value="${num(e.loanMonthly)||''}"></label>
+      <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f_ssoExempt" ${e.ssoExempt?'checked':''}> ไม่ต้องหักประกันสังคม</label>
+      <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f_bankTransfer" ${e.bankTransfer===false?'':'checked'}> จ่ายผ่านไฟล์โอน BBL</label>
+    </div>
+    <h3 style="margin:18px 0 8px;font-size:13px">เงินเพิ่มประจำ (ใส่ในช่อง Incentive ให้อัตโนมัติทุกเดือนในช่วงที่กำหนด)</h3>
+    <div class="fgrid">
+      <label>รายการ<input id="f_recLabel" value="${esc(((e.recurring||[])[0]||{}).label||'')}" placeholder="เช่น Acting allowance"></label>
+      <label>จำนวนเงิน/เดือน<input id="f_recAmt" value="${num(((e.recurring||[])[0]||{}).amount)||''}"></label>
+      <label>ตั้งแต่ (YYYY-MM)<input id="f_recFrom" value="${esc(((e.recurring||[])[0]||{}).fromYM||'')}"></label>
+      <label>ถึง (YYYY-MM) — เว้นว่าง = ไม่มีกำหนด<input id="f_recTo" value="${esc(((e.recurring||[])[0]||{}).toYM||'')}"></label>
+    </div>
+    <h3 style="margin:18px 0 8px;font-size:13px">ภาษีหัก ณ ที่จ่ายระดับปกติ ปี ${P.y}</h3>
+    <div class="fgrid">
+      <label>ภาษีต่อเดือน (ระดับปกติ)<input id="f_lvlAmt" value="${e.whtLevel&&e.whtLevel[P.y]?e.whtLevel[P.y].amt:''}" placeholder="คำนวณใหม่อัตโนมัติ"></label>
+      <label>ใช้กับเงินเดือน (บาท)<input id="f_lvlBase" value="${e.whtLevel&&e.whtLevel[P.y]?e.whtLevel[P.y].base:''}"></label>
+    </div>
+    <p class="sub" style="margin-top:6px">ระบบใช้ภาษีระดับนี้ทุกเดือนตราบที่เงินเดือนเท่ากับ "ใช้กับเงินเดือน" — เงินเดือนเปลี่ยนหรือเว้นว่างไว้ ระบบคำนวณระดับใหม่จากภาษีทั้งปี และบันทึกให้เองเมื่อปิดงวด</p>
+    <h3 style="margin:18px 0 8px;font-size:13px">ค่าลดหย่อนภาษีประจำปี (บาท/ปี)</h3>
+    <div class="fgrid">
+      ${ALLOW_FIELDS.map(([k,l])=>`<label>${l}<input id="fa_${k}" value="${A[k]!=null?A[k]:(k==='self'?60000:0)}"></label>`).join('')}
+    </div>
+    <p class="sub" style="margin-top:6px">ประกันสังคมและ PF สะสมคำนวณให้อัตโนมัติจากยอดจริง ไม่ต้องกรอกตรงนี้</p>
+    <h3 style="margin:18px 0 8px;font-size:13px">ยอดสะสมปี ${S.historyYear} (ใช้คำนวณภาษีแบบเกลี่ยทั้งปี)</h3>
+    <p class="sub">เดือน 1–${S.historyThroughMonth||0} เป็นยอดจริงจากไฟล์เดิม · เดือนที่มีการปิดงวดในแอปจะใช้ยอดจากแอปแทนโดยอัตโนมัติ</p>
+    <div class="histgrid">
+      <div></div><div class="hh">เงินเดือน</div><div class="hh">เงินได้อื่น</div><div class="hh">ภาษี</div><div class="hh">ปกส.</div><div class="hh">PF</div>
+      ${histRows.join('')}
+    </div>
+  </div>
+  <div class="dft">
+    ${code?'<button class="btn warn" onclick="delEmp(\''+esc(code)+'\')">ลบพนักงาน</button>':''}
+    <button class="btn" onclick="document.getElementById('dlgEmp').close()">ยกเลิก</button>
+    <button class="btn pri" onclick="saveEmp('${code?esc(code):''}')">บันทึก</button>
+  </div>`;
+  dlg.showModal();
+};
+window.saveEmp=function(code){
+  const g=id=>document.getElementById(id).value.trim();
+  const newCode=g('f_code');if(!newCode){toast('กรุณากรอกรหัสพนักงาน');return;}
+  let e=code?S.employees.find(x=>x.code===code):null;
+  if(!e){if(S.employees.some(x=>x.code===newCode)){toast('รหัส '+newCode+' มีอยู่แล้ว');return;}e={code:newCode};S.employees.push(e);}
+  e.name=g('f_name');e.taxId=g('f_taxId');e.position=g('f_position');e.dept=g('f_dept');e.email=g('f_email');
+  e.salary=num(g('f_salary'));e.pfRate=num(g('f_pfRate'));e.bankAcct=g('f_bankAcct');
+  e.startYM=g('f_startYM');e.status=document.getElementById('f_status').value;e.resignYM=g('f_resignYM');
+  e.pfErRate=g('f_pfErRate')===''?null:num(g('f_pfErRate'));e.loanMonthly=num(g('f_loanMonthly'));
+  e.ssoExempt=document.getElementById('f_ssoExempt').checked;e.bankTransfer=document.getElementById('f_bankTransfer').checked;
+  e.recurring=num(g('f_recAmt'))?[{label:g('f_recLabel'),amount:num(g('f_recAmt')),fromYM:g('f_recFrom'),toYM:g('f_recTo')}]:[];
+  e.whtLevel=e.whtLevel||{};
+  if(g('f_lvlAmt')==='')delete e.whtLevel[P.y];else e.whtLevel[P.y]={amt:num(g('f_lvlAmt')),base:g('f_lvlBase')===''?e.salary:num(g('f_lvlBase'))};
+  e.allowances=e.allowances||{};
+  for(const[k]of ALLOW_FIELDS)e.allowances[k]=num(document.getElementById('fa_'+k).value);
+  const h={income:{},other:{},wht:{},ssf:{},pf:{}};let any=false;
+  document.querySelectorAll('#dlgEmp [data-h]').forEach(inp=>{const[k,m]=inp.dataset.h.split('.');const v=inp.value.trim();if(v!==''){h[k][m]=num(v);any=true;}});
+  if(any)e.history2026=h;else delete e.history2026;
+  queueSave();document.getElementById('dlgEmp').close();render();toast('บันทึกข้อมูล '+e.code+' แล้ว');
+};
+window.delEmp=function(code){
+  const dlg=document.getElementById('dlgEmp');
+  if(dlg.dataset.confirmDel===code){S.employees=S.employees.filter(x=>x.code!==code);delete dlg.dataset.confirmDel;queueSave();dlg.close();render();toast('ลบ '+code+' แล้ว');}
+  else{dlg.dataset.confirmDel=code;toast('กดลบอีกครั้งเพื่อยืนยันการลบ '+code);}
+};
+
+/* ---------- payroll run ---------- */
+function vRun(el){
+  const run=getRun(true);const locked=run.status==='locked';
+  const t=runTotals();t.prevTotal=r2(t.rows.reduce((a,x)=>a+(prevMonthNet(x.e,P.y,P.m)||0),0));
+  const changed=t.rows.filter(x=>{const pv=prevMonthNet(x.e,P.y,P.m);return pv==null||Math.abs(x.c.transfer-pv)>0.5;}).length;
+  const gapM=new Set();for(const x of t.rows)for(const g of (x.c.detail&&x.c.detail.gaps)||[])gapM.add(g);
+  el.innerHTML=`
+  <h2>คำนวณเงินเดือน ${THMONTH[P.m-1]} ${P.y} ${locked?'<span class="chip g">ปิดงวดแล้ว</span>':'<span class="chip a">ฉบับร่าง</span>'}</h2>
+  <p class="sub">ภาษีคำนวณแบบ${{level:'ระดับคงที่ + ภาษีส่วนเพิ่มของเงินได้ครั้งคราวในเดือนที่จ่าย · ธันวาคมปรับให้ครบภาษีทั้งปี',catchup:'เกลี่ยทั้งปีตามจริง (ภาษีทั้งปี − หักแล้ว) ÷ เดือนคงเหลือ',std12:'มาตรฐาน ภาษีทั้งปี ÷ 12'}[S.settings.whtMethod]||''} · แตะยอดภาษีเพื่อดูวิธีคำนวณ · ช่องสีเหลือง = แก้ไขเอง (override)</p>
+  <div class="panel"><div class="hd"><h3>ทะเบียนจ่ายเงินเดือน · ${t.count} คน</h3>
+    <label style="font-size:12px;color:var(--muted)">วันที่จ่าย <input type="date" id="payDate" value="${esc(run.payDate||defaultPayDate())}" ${locked?'disabled':''} style="margin-left:4px"></label>
+    <label style="font-size:12px;color:var(--muted)" title="ยอดเงินสมทบส่วนนายจ้างตามใบแจ้งยอดกองทุน — ใช้ในบันทึกบัญชี PEAK">PF นายจ้าง (ตามใบแจ้งกองทุน) <input id="pfErTotal" class="num" style="width:110px;text-align:right;margin-left:4px" value="${isSet(run.pfErTotal)?run.pfErTotal:''}" placeholder="${fmt(t.pfErCalc)}" ${locked?'disabled':''}></label>
+    <button class="btn" onclick="exportRegisterXlsx()">ส่งออกทะเบียน (รูปแบบเดิม)</button>
+    ${locked?'<button class="btn" onclick="unlockRun()">เปิดงวดแก้ไข</button>':'<button class="btn pri" onclick="lockRun()">ปิดงวด ✓</button>'}
+  </div>
+  <div class="tblwrap" style="max-height:62vh;overflow-y:auto"><table id="runtbl"><thead><tr>
+    <th>รหัส</th><th>ชื่อ</th><th class="r">เงินเดือน</th><th class="r">OT/Success fee</th><th class="r">Incentive</th><th class="r">เงินได้อื่น</th>
+    <th class="r">รวมเงินได้</th><th class="r">ภาษี</th><th class="r">ปกส.</th><th class="r">PF</th><th class="r">กยศ.</th><th class="r">หักอื่น</th>
+    <th class="r">สุทธิ</th><th class="r">จ่ายแล้ว</th><th class="r">ยอดโอน</th><th class="r">เดือนก่อน</th><th class="r">ผลต่าง</th></tr></thead><tbody>
+  ${t.rows.map(({e,r,c})=>{
+    const rr=r||{};
+    const cell=(field,val,ovr)=>`<input class="cell num ${ovr?'ovr':''}" data-code="${esc(e.code)}" data-f="${field}" value="${val===0?'':val}" ${locked?'disabled':''} inputmode="decimal">`;
+    return `<tr>
+    <td class="num">${esc(e.code)}</td><td class="name-cell" title="${esc(e.name)}">${esc(e.name)}</td>
+    <td class="r">${cell('salaryOverride',rr.salaryOverride!=null?rr.salaryOverride:c.sal,rr.salaryOverride!=null)}</td>
+    <td class="r">${cell('ot',num(rr.ot)||'' ,false)}</td>
+    <td class="r">${cell('incentive',c.inc||'',isSet(rr.incentive)&&Math.abs(num(rr.incentive)-recurAmt(e,P.y,P.m))>0.005)}</td>
+    <td class="r">${cell('otherAdd',num(rr.otherAdd)||'',false)}</td>
+    <td class="r num"><b>${fmt(c.total)}</b></td>
+    <td class="r"><a href="#" class="num" style="color:var(--blue)" onclick="showBrk('${esc(e.code)}');return false">${fmt(c.wht)}</a>${rr.whtOverride!=null?' <span class="chip a" title="แก้ไขเอง">ovr</span>':''}</td>
+    <td class="r">${cell('ssoOverride',rr.ssoOverride!=null?rr.ssoOverride:c.sso,rr.ssoOverride!=null)}</td>
+    <td class="r">${cell('pfOverride',rr.pfOverride!=null?rr.pfOverride:c.pf,rr.pfOverride!=null)}</td>
+    <td class="r">${cell('studentLoan',c.loan||'',isSet(rr.studentLoan)&&Math.abs(num(rr.studentLoan)-num(e.loanMonthly))>0.005)}</td>
+    <td class="r">${cell('otherDed',num(rr.otherDed)||'',false)}</td>
+    <td class="r num"><b>${fmt(c.net)}</b></td>
+    <td class="r">${cell('paidAdvance',num(rr.paidAdvance)||'',false)}</td>
+    <td class="r num"><b>${fmt(c.transfer)}</b></td>${prevCells(e,c)}</tr>`;}).join('')}
+  </tbody><tfoot><tr>
+    <td colspan="2">รวม ${t.count} คน</td><td class="r num">${fmt(t.sal)}</td><td class="r num" colspan="3">${fmt(t.other)}</td>
+    <td class="r num">${fmt(t.gross)}</td><td class="r num">${fmt(t.wht)}</td><td class="r num">${fmt(t.sso)}</td><td class="r num">${fmt(t.pf)}</td>
+    <td class="r num">${fmt(t.loan)}</td><td class="r num">${fmt(t.oded)}</td><td class="r num">${fmt(t.net)}</td><td></td><td class="r num">${fmt(t.transfer)}</td>
+    <td class="r num">${fmt(t.prevTotal)}</td><td class="r num">${fmt(r2(t.transfer-t.prevTotal))}</td>
+  </tr></tfoot></table></div></div>
+  ${gapM.size?`<div class="note warn">⚠ ยังไม่มีข้อมูลเดือน ${[...gapM].sort((a,b)=>a-b).map(g=>THMONTH[g-1]).join(', ')} ${P.y} — ปิดงวดหรือนำเข้ายอดจริงของเดือนนั้นก่อน ไม่เช่นนั้นภาษีทั้งปีจะคำนวณต่ำไป</div>`:''}
+  <div class="note">เทียบกับเดือนก่อน: ยอดโอนเปลี่ยน ${changed} คน จาก ${t.count} คน — ผลต่างทุกบรรทัดควรอธิบายได้ด้วยรายการใน MPA หรือเอกสารประกอบ (<a href="#" onclick="go('mpa');return false">ดู MPA</a>)</div>
+  <div class="panel"><div class="hd"><h3><span class="sn">5</span> ส่งออกไฟล์งวด ${THMONTH[P.m-1]} ${P.y}</h3>${locked?'':'<span class="chip a">ปิดงวดก่อนส่งออกไฟล์ยื่น</span>'}</div>
+    <div class="bd exports">
+      <button class="btn pri" onclick="exportRegisterXlsx()">ทะเบียนเงินเดือน + Tax calculation (.xlsx)</button>
+      <button class="btn" onclick="exportPnd1Xlsx()">ใบแนบ ภ.ง.ด.1 (.xlsx)</button>
+      <button class="btn" onclick="exportPnd1Txt()">ภ.ง.ด.1 (.txt)</button>
+      <button class="btn" onclick="exportSsoXlsx()">สปส.1-10 (.xlsx)</button>
+      <button class="btn" onclick="exportSsoTxt()">สปส.1-10 (.txt)</button>
+      <button class="btn" onclick="exportBblTxt()">ไฟล์โอน BBL (.txt)</button>
+      <button class="btn" onclick="exportPeakXlsx()">บันทึกบัญชี PEAK (.xlsx)</button>
+    </div></div>
+  <div class="note">แตะยอดภาษีของแต่ละคนเพื่อดูการกระจายรายเดือนและวิธีคำนวณ · พิมพ์ทับช่องภาษีไม่ได้ — ถ้าต้องการกำหนดภาษีเอง เปิดหน้าต่างวิธีคำนวณแล้วกด "กำหนดภาษีเอง"</div>`;
+  document.getElementById('payDate')?.addEventListener('change',ev=>{getRun(true).payDate=ev.target.value;queueSave();});
+  document.getElementById('pfErTotal')?.addEventListener('change',ev=>{const v=ev.target.value.trim();getRun(true).pfErTotal=v===''?null:num(v);queueSave();vRun(document.getElementById('view'));});
+  el.querySelectorAll('input.cell').forEach(inp=>{
+    inp.addEventListener('change',()=>{
+      const run=getRun(true);const r=rowOf(run,inp.dataset.code);const f=inp.dataset.f;const v=inp.value.trim();
+      if(f==='salaryOverride'){const emp=S.employees.find(x=>x.code===inp.dataset.code);const nv=v===''?null:num(v);
+        r.salaryOverride=(nv==null||Math.abs(nv-emp.salary)<0.005)?null:nv;}
+      else if(f==='incentive'||f==='studentLoan'){const emp=S.employees.find(x=>x.code===inp.dataset.code);
+        const base=f==='incentive'?recurAmt(emp,P.y,P.m):num(emp.loanMonthly);const nv=v===''?0:num(v);
+        r[f]=Math.abs(nv-base)<0.005?null:nv;}
+      else if(f==='ssoOverride'||f==='pfOverride'){const emp=S.employees.find(x=>x.code===inp.dataset.code);
+        const base=f==='ssoOverride'?ssoOf(emp,r.salaryOverride!=null?r.salaryOverride:emp.salary):pfOf(emp,r.salaryOverride!=null?r.salaryOverride:emp.salary);
+        const nv=v===''?null:num(v);r[f]=(nv==null||Math.abs(nv-base)<0.005)?null:nv;}
+      else r[f]=num(v);
+      queueSave();vRun(document.getElementById('view'));
+    });
+  });
+}
+window.lockRun=function(){const r=getRun(true);
+  // snapshot computed values so later months use them even if master data changes
+  const t=runTotals();
+  for(const{e,c}of t.rows){
+    const row=rowOf(r,e.code);
+    if(S.settings.whtMethod==='level'){
+      const d=computeWHT(e,row,P.y,P.m).detail;
+      const lvl=row.whtOverride!=null?r2(Math.max(0,num(row.whtOverride)-d.extra)):d.level;
+      if(lvl!=null){e.whtLevel=e.whtLevel||{};e.whtLevel[P.y]={amt:lvl,base:c.sal};}
+    }
+    if(row.whtOverride==null)row.whtOverride=c.wht;if(row.ssoOverride==null)row.ssoOverride=c.sso;if(row.pfOverride==null)row.pfOverride=c.pf;
+    if(!isSet(row.incentive))row.incentive=c.inc;if(!isSet(row.studentLoan))row.studentLoan=c.loan;
+  }
+  r.status='locked';
+  queueSave();render();toast('ปิดงวด '+pkey()+' แล้ว — ยอดถูกตรึงไว้สำหรับการคำนวณเดือนถัดไป');};
+window.unlockRun=function(){const r=getRun(true);r.status='draft';queueSave();render();};
+window.showBrk=function(code){
+  const emp=S.employees.find(x=>x.code===code);const run=getRun(false);const r=run?run.rows[code]:null;
+  const c=calcRow(emp,r||{},P.y,P.m,true);const d=c.detail;
+  const dlg=document.getElementById('dlgBrk');
+  if(!d){dlg.innerHTML=`<div class="dhd"><h3>${esc(code)} — ภาษีกำหนดเอง</h3><button class="btn sm" onclick="dlgBrk.close()">ปิด ✕</button></div>
+    <div class="dbd brk"><p>ภาษีเดือนนี้ถูกกำหนดเองไว้ที่ <b class="num">${fmt(c.wht)}</b> บาท</p></div>
+    <div class="dft"><button class="btn" onclick="clearWhtOvr('${esc(code)}')">กลับไปใช้ค่าคำนวณอัตโนมัติ</button></div>`;dlg.showModal();return;}
+  const mrows=d.months.map(mo=>`<tr><td>${THMONTH[mo.m-1]}</td><td class="r num">${fmt(mo.inc)}</td><td class="r num">${fmt(mo.oth)}</td>
+    <td class="r num">${mo.wht==null?'—':fmt(mo.wht)}</td><td>${{hist:'ยอดจริง (ไฟล์เดิม)',run:'ยอดจริง (แอป)',cur:'งวดนี้',proj:'ประมาณการ','-':'—'}[mo.src]}</td></tr>`).join('');
+  dlg.innerHTML=`
+  <div class="dhd"><h3>วิธีคำนวณภาษี · ${esc(emp.code)} ${esc(emp.name)}</h3><button class="btn sm" onclick="dlgBrk.close()">ปิด ✕</button></div>
+  <div class="dbd brk">
+    <div class="cards">
+      <div class="card"><div class="k">เงินได้ทั้งปี (ประมาณการ)</div><div class="v num">${fmt(d.gross)}</div></div>
+      <div class="card"><div class="k">หักค่าใช้จ่าย + ลดหย่อน</div><div class="v num">${fmt(d.expense+d.allow+d.donate)}</div><div class="s">คชจ. ${fmt0(d.expense)} · ลดหย่อน ${fmt0(d.allow)} · บริจาค ${fmt0(d.donate)}</div></div>
+      <div class="card"><div class="k">เงินได้สุทธิ → ภาษีทั้งปี</div><div class="v num">${fmt(d.taxAll)}</div><div class="s">ฐานภาษี ${fmt0(d.taxableAll)}</div></div>
+      <div class="card acc"><div class="k">ภาษีเดือนนี้</div><div class="v num">${fmt(c.wht)}</div><div class="s">${brkHow(d)}</div></div>
+    </div>
+    <p class="sub">ลดหย่อนรวม ${fmt(d.allow)} = ส่วนตัว/ครอบครัว/กองทุน/ดอกเบี้ยบ้าน + ปกส.สะสม ${fmt0(d.annSSO)} + PF สะสม ${fmt0(d.annPF)} — แก้ไขค่าลดหย่อนได้ในหน้า พนักงาน</p>
+    <div class="tblwrap" style="max-height:34vh;overflow-y:auto"><table><thead><tr><th>เดือน</th><th class="r">เงินเดือน</th><th class="r">เงินได้อื่น</th><th class="r">ภาษีที่หัก</th><th>ที่มา</th></tr></thead><tbody>${mrows}</tbody></table></div>
+  </div>
+  <div class="dft">
+    <label style="margin-right:auto;font-size:12px">กำหนดภาษีเอง: <input id="whtOvrIn" class="num" style="width:110px;text-align:right" value="${r&&r.whtOverride!=null?r.whtOverride:''}" placeholder="${c.wht}"></label>
+    ${r&&r.whtOverride!=null?`<button class="btn" onclick="clearWhtOvr('${esc(code)}')">ใช้ค่าคำนวณอัตโนมัติ</button>`:''}
+    <button class="btn pri" onclick="setWhtOvr('${esc(code)}')">บันทึก</button>
+  </div>`;
+  dlg.showModal();
+};
+function prevCells(e,c){const pv=prevMonthNet(e,P.y,P.m);
+  if(pv==null)return '<td class="r"><span class="chip b">ใหม่</span></td><td></td>';
+  const d=r2(c.transfer-pv);return `<td class="r num">${fmt(pv)}</td><td class="r num">${Math.abs(d)<0.5?'':`<span class="chip ${d>0?'g':'a'}">${d>0?'+':''}${fmt(d)}</span>`}</td>`;}
+function brkHow(d){
+  if(d.how==='plug')return `เดือนสุดท้ายของปี/ของการทำงาน: ภาษีทั้งปี ${fmt(d.taxAll)} − หักแล้ว ${fmt(d.whtYTD)}`;
+  if(d.how==='level'||d.how==='relevel'){
+    const lv=d.how==='level'?`ระดับปกติ ${fmt(d.level)}`:`ระดับใหม่ ${fmt(d.level)} = (${fmt0(d.taxExcl)} − หักแล้ว ${fmt0(d.whtYTD)}) ÷ ${d.remaining}`;
+    return d.curOther?`${lv} + ภาษีส่วนเพิ่มของเงินได้ครั้งคราว ${fmt(d.curOther)} = ${fmt(d.extra)}`:lv;
+  }
+  if(d.how==='catchup')return `(${fmt0(d.taxAll)} − หักแล้ว ${fmt0(d.whtYTD)}) ÷ ${d.remaining} เดือน`;
+  return 'ภาษีเงินเดือนทั้งปี ÷ 12 + ส่วนของเงินได้อื่น';
+}
+window.setWhtOvr=function(code){const v=document.getElementById('whtOvrIn').value.trim();const r=rowOf(getRun(true),code);
+  r.whtOverride=v===''?null:num(v);queueSave();dlgBrk.close();render();};
+window.clearWhtOvr=function(code){const r=rowOf(getRun(true),code);r.whtOverride=null;queueSave();dlgBrk.close();render();};
+function exportRunXlsx(){
+  const t=runTotals();const run=getRun(false);
+  const aoa=[[S.company.nameEN],['Payroll report'],['Period',pkey(),'','Pay date',run&&run.payDate||''],[],
+   ['No','Employee name','Remuneration','Success fee/OT','Incentive','Other addition','Total','Withholding Tax','Social Security Fund','Provident fund','Student loan','Other','Total deduction','Net Pay','Paid in advance','Transfer','A/C','Position','Dept']];
+  for(const{e,r,c}of t.rows)aoa.push([e.code,e.name,c.sal,num((r||{}).ot),c.inc,num((r||{}).otherAdd),c.total,c.wht,c.sso,c.pf,c.loan,c.oded,c.ded,c.net,c.adv,c.transfer,e.bankAcct,e.position,e.dept]);
+  aoa.push(['','Total',t.sal,'','','',t.gross,t.wht,t.sso,t.pf,t.loan,t.oded,'',t.net,'',t.transfer]);
+  saveFile(`Payroll_${pkey()}_CET.xlsx`,aoaToXlsx([{name:pkey(),aoa,widths:[9,26,12,12,10,10,12,11,8,10,8,8,12,12,11,12,16,20,18]}]));
+}
+
+/* ---------- PND1 ---------- */
+function vPnd1(el){
+  const t=runTotals();const rows=t.rows.filter(x=>x.c.total>0);
+  const bad=rows.filter(x=>!/^\d{13}$/.test(digits(x.e.taxId)));
+  el.innerHTML=`
+  <h2>ภ.ง.ด.1 — ${THMONTH[P.m-1]} ${P.y}</h2>
+  <p class="sub">เงินได้ตามมาตรา 40(1) เงินเดือน ค่าจ้าง · ยื่นแบบและนำส่งภาษีภายในวันที่ 7 ของเดือนถัดไป (e-filing ขยายถึงวันที่ 15)</p>
+  <div class="cards">
+    <div class="card"><div class="k">ผู้มีเงินได้</div><div class="v num">${rows.length} คน</div></div>
+    <div class="card"><div class="k">เงินได้ทั้งสิ้น</div><div class="v num">${fmt(t.gross)}</div></div>
+    <div class="card acc"><div class="k">ภาษีนำส่ง</div><div class="v num">${fmt(t.wht)}</div></div>
+  </div>
+  ${bad.length?`<div class="note warn">⚠ ${bad.length} คนไม่มีเลขประจำตัวผู้เสียภาษี 13 หลัก (${bad.slice(0,6).map(x=>esc(x.e.code)).join(', ')}${bad.length>6?' …':''}) — ใบแนบจะไม่สมบูรณ์จนกว่าจะแก้ไขในหน้า พนักงาน</div>`:''}
+  <div class="panel"><div class="hd"><h3>ใบแนบ ภ.ง.ด.1 (เงินได้ 40(1))</h3>
+    <button class="btn" onclick="exportPnd1Txt()">ไฟล์โอนย้าย .txt (RD)</button>
+    <button class="btn pri" onclick="exportPnd1Xlsx()">ส่งออก Excel</button>
+  </div>
+  <div class="tblwrap" style="max-height:58vh;overflow-y:auto"><table><thead><tr>
+    <th class="r">ลำดับ</th><th>เลขประจำตัวผู้เสียภาษี</th><th>ชื่อ-สกุล</th><th class="r">วันที่จ่าย</th>
+    <th class="r">เงินได้</th><th class="r">ภาษีที่หัก</th></tr></thead><tbody>
+    ${rows.map((x,i)=>`<tr><td class="r num">${i+1}</td>
+      <td class="num">${/^\d{13}$/.test(digits(x.e.taxId))?esc(x.e.taxId):'<span class="chip r">'+esc(x.e.taxId||'ไม่มี')+'</span>'}</td>
+      <td class="name-cell">${esc(x.e.name)}</td><td class="r num">${esc((getRun(false)||{}).payDate||defaultPayDate())}</td>
+      <td class="r num">${fmt(x.c.total)}</td><td class="r num">${fmt(x.c.wht)}</td></tr>`).join('')}
+  </tbody><tfoot><tr><td colspan="4">รวม ${rows.length} ราย</td><td class="r num">${fmt(t.gross)}</td><td class="r num">${fmt(t.wht)}</td></tr></tfoot></table></div></div>
+  <div class="note">ไฟล์ .txt ใช้รูปแบบคั่นด้วย | (ลำดับ|เลขผู้เสียภาษี|คำนำหน้า|ชื่อ|สกุล|วันที่จ่าย|เงินได้|ภาษี|เงื่อนไขการหัก 1) สำหรับโปรแกรมโอนย้ายข้อมูลใบแนบของกรมสรรพากร — โปรดตรวจรูปแบบกับเวอร์ชันล่าสุดของ RD ก่อนนำส่งครั้งแรก หรือใช้ไฟล์ Excel คัดลอกลงแบบฟอร์ม e-filing</div>`;
+}
+function pnd1Rows(){
+  const t=runTotals();const run=getRun(false);const payDate=(run&&run.payDate)||defaultPayDate();
+  const[yy,mm,dd]=payDate.split('-');const thDate=dd+'/'+mm+'/'+(Number(yy)+543);
+  return t.rows.filter(x=>x.c.total>0).map((x,i)=>{const n=splitName(x.e.name);
+    return{seq:i+1,taxId:digits(x.e.taxId),title:n.title,first:n.first,last:n.last,date:thDate,income:x.c.total,tax:x.c.wht};});
+}
+function exportPnd1Xlsx(){
+  const rows=pnd1Rows();const t=runTotals();
+  const aoa=[['ใบแนบ ภ.ง.ด.1 — เงินได้ตามมาตรา 40(1) เงินเดือน ค่าจ้าง'],
+    ['ผู้มีหน้าที่หักภาษี',S.company.nameTH,'เลขผู้เสียภาษี',S.company.taxIdCo,'สาขา',S.company.branch],
+    ['เดือน/ปีภาษี',THMONTH[P.m-1]+' '+(P.y+543)],[],
+    ['ลำดับ','เลขประจำตัวผู้เสียภาษี','คำนำหน้า','ชื่อ','นามสกุล','วัน เดือน ปี ที่จ่าย','จำนวนเงินได้','ภาษีที่หักนำส่ง','เงื่อนไข']];
+  for(const r of rows)aoa.push([r.seq,r.taxId,r.title,r.first,r.last,r.date,r.income,r.tax,1]);
+  aoa.push(['','','','','','รวม',t.gross,t.wht,'']);
+  saveFile(`PND1_${pkey()}_CET.xlsx`,aoaToXlsx([{name:'PND1',aoa,widths:[6,16,8,16,20,14,14,14,7]}]));
+}
+function exportPnd1Txt(){
+  const rows=pnd1Rows();
+  const txt=rows.map(r=>[r.seq,r.taxId,r.title,r.first,r.last,r.date,r.income.toFixed(2),r.tax.toFixed(2),1].join('|')).join('\r\n');
+  saveFile(`PND1_${pkey()}_CET.txt`,txt);
+}
+
+/* ---------- SSO ---------- */
+function vSso(el){
+  const st=S.settings;const t=runTotals();
+  const rows=t.rows.filter(x=>x.c.sso>0||x.ssoEr>0);
+  const totEe=rows.reduce((s,x)=>s+x.c.sso,0),totEr=rows.reduce((s,x)=>s+x.ssoEr,0);
+  const totWage=rows.reduce((s,x)=>s+Math.min(Math.max(x.c.sal,st.ssoFloor),st.ssoCeil),0);
+  el.innerHTML=`
+  <h2>ประกันสังคม (สปส.1-10) — ${THMONTH[P.m-1]} ${P.y}</h2>
+  <p class="sub">อัตรา ${st.ssoRate}% ของค่าจ้าง (ขั้นต่ำ ${fmt0(st.ssoFloor)} สูงสุด ${fmt0(st.ssoCeil)} บาท) · นำส่งภายในวันที่ 15 ของเดือนถัดไป</p>
+  <div class="cards">
+    <div class="card"><div class="k">ผู้ประกันตน</div><div class="v num">${rows.length} คน</div></div>
+    <div class="card"><div class="k">ค่าจ้างตามฐาน</div><div class="v num">${fmt(totWage)}</div></div>
+    <div class="card"><div class="k">เงินสมทบลูกจ้าง</div><div class="v num">${fmt(totEe)}</div></div>
+    <div class="card"><div class="k">เงินสมทบนายจ้าง</div><div class="v num">${fmt(totEr)}</div></div>
+    <div class="card acc"><div class="k">รวมนำส่ง</div><div class="v num">${fmt(totEe+totEr)}</div></div>
+  </div>
+  <div class="panel"><div class="hd"><h3>รายชื่อผู้ประกันตน</h3>
+    <button class="btn" onclick="exportSsoTxt()">ไฟล์ .txt (e-Service)</button>
+    <button class="btn pri" onclick="exportSsoXlsx()">ส่งออก Excel</button>
+  </div>
+  <div class="tblwrap" style="max-height:58vh;overflow-y:auto"><table><thead><tr>
+    <th class="r">ลำดับ</th><th>เลขบัตรประชาชน</th><th>ชื่อ-สกุล</th><th class="r">ค่าจ้างจริง</th><th class="r">ฐานคำนวณ</th><th class="r">สมทบลูกจ้าง</th><th class="r">สมทบนายจ้าง</th></tr></thead><tbody>
+    ${rows.map((x,i)=>{const base=Math.min(Math.max(x.c.sal,st.ssoFloor),st.ssoCeil);return `<tr>
+      <td class="r num">${i+1}</td><td class="num">${esc(x.e.taxId||'')}</td><td class="name-cell">${esc(x.e.name)}</td>
+      <td class="r num">${fmt(x.c.sal)}</td><td class="r num">${fmt(base)}</td><td class="r num">${fmt(x.c.sso)}</td><td class="r num">${fmt(x.ssoEr)}</td></tr>`;}).join('')}
+  </tbody><tfoot><tr><td colspan="4">รวม ${rows.length} ราย</td><td class="r num">${fmt(totWage)}</td><td class="r num">${fmt(totEe)}</td><td class="r num">${fmt(totEr)}</td></tr></tfoot></table></div></div>
+  <div class="note">เงินสมทบนายจ้างใช้อัตราเดียวกับลูกจ้าง (${st.ssoRate}%) · ไฟล์ .txt รูปแบบ เลขบัตร|คำนำหน้า|ชื่อ|สกุล|ค่าจ้าง|เงินสมทบ สำหรับแนบในระบบ SSO e-Service — ตรวจรูปแบบกับระบบก่อนนำส่งครั้งแรก</div>`;
+}
+function exportSsoXlsx(){
+  const st=S.settings;const t=runTotals();const rows=t.rows.filter(x=>x.c.sso>0||x.ssoEr>0);
+  const aoa=[['แบบรายการแสดงการส่งเงินสมทบ สปส.1-10 (ส่วนที่ 2)'],
+    ['ชื่อสถานประกอบการ',S.company.nameTH,'เลขที่บัญชีนายจ้าง',S.company.ssoAccount,'ลำดับที่สาขา',S.company.branch],
+    ['งวดเดือน',THMONTH[P.m-1]+' '+(P.y+543),'อัตราเงินสมทบ',st.ssoRate+'%'],[],
+    ['ลำดับ','เลขประจำตัวประชาชน','คำนำหน้า','ชื่อ','นามสกุล','ค่าจ้าง','เงินสมทบลูกจ้าง','เงินสมทบนายจ้าง']];
+  rows.forEach((x,i)=>{const n=splitName(x.e.name);const base=Math.min(Math.max(x.c.sal,st.ssoFloor),st.ssoCeil);
+    aoa.push([i+1,digits(x.e.taxId),n.title,n.first,n.last,base,x.c.sso,x.ssoEr]);});
+  const totEe=rows.reduce((s,x)=>s+x.c.sso,0),totEr=rows.reduce((s,x)=>s+x.ssoEr,0);
+  aoa.push(['','','','','รวม',rows.reduce((s,x)=>s+Math.min(Math.max(x.c.sal,st.ssoFloor),st.ssoCeil),0),totEe,totEr]);
+  saveFile(`SSO_${pkey()}_CET.xlsx`,aoaToXlsx([{name:'สปส1-10',aoa,widths:[6,16,8,16,20,12,12,12]}]));
+}
+function exportSsoTxt(){
+  const st=S.settings;const t=runTotals();const rows=t.rows.filter(x=>x.c.sso>0);
+  const txt=rows.map(x=>{const n=splitName(x.e.name);const base=Math.min(Math.max(x.c.sal,st.ssoFloor),st.ssoCeil);
+    return[digits(x.e.taxId),n.title,n.first,n.last,base.toFixed(2),x.c.sso.toFixed(2)].join('|');}).join('\r\n');
+  saveFile(`SSO_${pkey()}_CET.txt`,txt);
+}
+
+/* ---------- bank ---------- */
+/* lines in the BBL salary file: employees paid by file, plus the SSO + student-loan remittance line */
+function bankLines(){
+  const t=runTotals();
+  const emp=t.rows.filter(x=>x.e.bankTransfer!==false&&x.c.transfer>0.005)
+    .map(x=>({code:x.e.code,name:x.e.name,acct:x.e.bankAcct,amount:x.c.transfer}));
+  const outside=t.rows.filter(x=>x.e.bankTransfer===false&&x.c.transfer>0.005);
+  const remit=r2(t.sso+t.ssoEr+t.loan);
+  if(S.company.remitAcct&&remit>0)emp.push({code:'SL/SSO',name:S.company.remitName||'SSO + กยศ. remittance',acct:S.company.remitAcct,amount:remit,remit:true});
+  return{lines:emp,outside,remit,t};
+}
+function vBank(el){
+  const{lines,outside,remit,t}=bankLines();
+  const tot=r2(lines.reduce((s,x)=>s+x.amount,0));
+  const bad=lines.filter(x=>digits(x.acct).length!==10);
+  const run=getRun(false);
+  el.innerHTML=`
+  <h2>โอนเงินเดือน — ${THMONTH[P.m-1]} ${P.y}</h2>
+  <p class="sub">จ่ายจากบัญชี ${esc(S.company.payBankName)} ${esc(S.company.payBankAcct)} · วันที่โอน ${esc((run&&run.payDate)||defaultPayDate())} · ยอดโอน = เงินสุทธิ − จ่ายล่วงหน้าแล้ว</p>
+  <div class="cards">
+    <div class="card"><div class="k">รายการในไฟล์ BBL</div><div class="v num">${lines.length}</div></div>
+    <div class="card acc"><div class="k">ยอดรวมในไฟล์</div><div class="v num">${fmt(tot)}</div></div>
+    <div class="card"><div class="k">นำส่ง ปกส. + กยศ.</div><div class="v num">${fmt(remit)}</div><div class="s">${S.company.remitAcct?'รวมในไฟล์ (SL/SSO)':'ไม่รวม — ตั้งบัญชีรับโอนที่หน้า ตั้งค่า'}</div></div>
+    ${outside.length?`<div class="card"><div class="k">จ่ายนอกไฟล์ BBL</div><div class="v num">${fmt(outside.reduce((s,x)=>s+x.c.transfer,0))}</div><div class="s">${outside.map(x=>esc(x.e.code)).join(', ')}</div></div>`:''}
+  </div>
+  ${bad.length?`<div class="note warn">⚠ เลขบัญชี ${bad.length} รายการไม่ใช่ 10 หลัก: ${bad.slice(0,6).map(x=>esc(x.code)).join(', ')}${bad.length>6?' …':''} — ไฟล์ BBL รับเฉพาะบัญชีกรุงเทพ 10 หลัก</div>`:''}
+  <div class="panel"><div class="hd"><h3>รายการโอน</h3>
+    <button class="btn pri" onclick="exportBblTxt()">ไฟล์ BBL (.txt)</button>
+    <button class="btn" onclick="exportBankXlsx()">ส่งออก Excel</button>
+    <button class="btn" onclick="exportBankCsv()">CSV</button>
+  </div>
+  <div class="tblwrap" style="max-height:60vh;overflow-y:auto"><table><thead><tr>
+    <th class="r">ลำดับ</th><th>รหัส</th><th>ชื่อบัญชี</th><th>เลขบัญชี</th><th class="r">จำนวนเงิน</th><th class="r">เดือนก่อน</th><th class="r">ผลต่าง</th></tr></thead><tbody>
+    ${lines.map((x,i)=>{const e=S.employees.find(z=>z.code===x.code);const pv=e?prevMonthNet(e,P.y,P.m):null;const d=pv==null?null:r2(x.amount-pv);
+      return `<tr><td class="r num">${i+1}</td><td class="num">${esc(x.code)}</td><td class="name-cell">${esc(x.name)}</td>
+      <td class="num">${digits(x.acct).length===10?esc(digits(x.acct)):'<span class="chip r">'+esc(x.acct||'ไม่มี')+'</span>'}</td><td class="r num"><b>${fmt(x.amount)}</b></td>
+      <td class="r num">${pv==null?(x.remit?'':'<span class="chip b">ใหม่</span>'):fmt(pv)}</td><td class="r num">${d==null||Math.abs(d)<0.5?'':`<span class="chip ${d>0?'g':'a'}">${d>0?'+':''}${fmt(d)}</span>`}</td></tr>`;}).join('')}
+  </tbody><tfoot><tr><td colspan="4">รวม ${lines.length} รายการ</td><td class="r num">${fmt(tot)}</td><td></td><td></td></tr></tfoot></table></div></div>
+  <div class="note">ไฟล์ .txt รูปแบบเดียวกับไฟล์ที่ส่ง BBL (H / D / T ยาว 128 ตัวอักษร): ส่วนหัวบัญชีบริษัทและวันที่โอน รายการ D ละ 1 บัญชี ส่วนท้ายจำนวนรายการและยอดรวม</div>`;
+}
+/* BBL payroll direct-credit file: fixed-width 128-char records, CRLF */
+function bblTxt(lines,payDate){
+  const pad=(s,n)=>String(s).slice(0,n).padEnd(n,' ');
+  const z=(v,n)=>String(v).padStart(n,'0').slice(-n);
+  const co=digits(S.company.payBankAcct);const[yy,mm,dd]=String(payDate).split('-');
+  const date=dd+mm+yy.slice(2);
+  const out=['H'+z(1,6)+'002'+z(co,10)+pad(S.company.bblName||'CET',25)+date];
+  let seq=1,tot=0;
+  for(const x of lines){seq++;const sat=Math.round(x.amount*100);tot+=sat;
+    out.push('D'+z(seq,6)+'002'+z(digits(x.acct),10)+'C'+z(sat,10)+'029'+''.padEnd(59,'0')+pad(x.name,35));}
+  seq++;
+  out.push('T'+z(seq,6)+'002'+z(co,10)+z(0,7)+z(0,13)+z(lines.length,7)+z(tot,13));
+  return out.map(l=>l.padEnd(128,'0').slice(0,128)).join('\r\n')+'\r\n';
+}
+function exportBblTxt(){
+  const{lines}=bankLines();const run=getRun(false);
+  const bad=lines.filter(x=>digits(x.acct).length!==10);
+  if(digits(S.company.payBankAcct).length!==10){toast('ใส่เลขบัญชีจ่ายเงินเดือนของบริษัท (10 หลัก) ที่หน้า ตั้งค่า ก่อน');return;}
+  if(bad.length){toast('แก้เลขบัญชีก่อน: '+bad.map(x=>x.code).join(', '));return;}
+  saveFile(`CET ${P.y}${String(P.m).padStart(2,'0')}.txt`,bblTxt(lines,(run&&run.payDate)||defaultPayDate()));
+}
+function exportBankCsv(){
+  const{lines}=bankLines();
+  const aoa=[['No','AccountNo','AccountName','Amount','EmployeeCode']];
+  lines.forEach((x,i)=>aoa.push([i+1,digits(x.acct),x.name,x.amount.toFixed(2),x.code]));
+  saveFile(`BankTransfer_${pkey()}_CET.csv`,csvOf(aoa));
+}
+function exportBankXlsx(){
+  const{lines}=bankLines();
+  const aoa=[['Salary transfer — '+pkey(),'','จากบัญชี',S.company.payBankAcct],[],
+    ['No','Employee','Account name','Account no.','Amount','Previous month','Difference']];
+  lines.forEach((x,i)=>{const e=S.employees.find(z=>z.code===x.code);const pv=e?prevMonthNet(e,P.y,P.m):null;
+    aoa.push([i+1,x.code,x.name,digits(x.acct),x.amount,pv==null?'':pv,pv==null?'':r2(x.amount-pv)]);});
+  aoa.push(['','','','Total',r2(lines.reduce((s,x)=>s+x.amount,0))]);
+  saveFile(`BankTransfer_${pkey()}_CET.xlsx`,aoaToXlsx([{name:'Transfer',aoa,widths:[6,10,30,14,14,14,12]}]));
+}
+/* ---------- PEAK ---------- */
+function peakLines(){
+  const t=runTotals();const ac=S.settings.accounts;const mm=THMONTH[P.m-1]+' '+P.y;
+  const L=[];const add=(a,desc,dr,cr)=>{if(Math.abs(dr)<0.005&&Math.abs(cr)<0.005)return;L.push({code:a.code,name:a.name,desc,dr:Math.round(dr*100)/100,cr:Math.round(cr*100)/100});};
+  add(ac.salaryExp,'เงินเดือนและเงินได้พนักงาน '+mm,t.gross,0);
+  add(ac.ssoExp,'เงินสมทบประกันสังคมส่วนนายจ้าง '+mm,t.ssoEr,0);
+  add(ac.pfExp,'เงินสมทบ PF ส่วนนายจ้าง '+mm,t.pfEr,0);
+  add(ac.whtPay,'ภาษีหัก ณ ที่จ่าย ภ.ง.ด.1 '+mm,0,t.wht);
+  add(ac.ssoPay,'ประกันสังคมค้างจ่าย (ลูกจ้าง+นายจ้าง) '+mm,0,t.sso+t.ssoEr);
+  add(ac.pfPay,'เงินนำส่งกองทุนสำรองเลี้ยงชีพ '+mm,0,t.pf+t.pfEr);
+  add(ac.loanPay,'เงินกู้ กยศ. รอนำส่ง '+mm,0,t.loan);
+  add(ac.salPay,'เงินเดือนค้างจ่าย (สุทธิ'+(t.oded?' รวมรายการหักอื่น':'')+') '+mm,0,t.net+t.oded);
+  return{L,t};
+}
+function vPeak(el){
+  const{L,t}=peakLines();const run=getRun(false);
+  const dr=L.reduce((s,x)=>s+x.dr,0),cr=L.reduce((s,x)=>s+x.cr,0);
+  el.innerHTML=`
+  <h2>บันทึกบัญชีเงินเดือนใน PEAK — ${THMONTH[P.m-1]} ${P.y}</h2>
+  <p class="sub">สมุดรายวันทั่วไป ตั้งค้างจ่ายเงินเดือน ภาษี ประกันสังคม และ PF · วันที่เอกสาร ${esc((run&&run.payDate)||defaultPayDate())} · แก้รหัสบัญชีได้ที่หน้า ตั้งค่า</p>
+  <div class="panel"><div class="hd"><h3>รายการสมุดรายวัน (JV)</h3>
+    <button class="btn" onclick="copyPeak()">คัดลอกตาราง</button>
+    <button class="btn" onclick="exportPeakCsv()">ส่งออก CSV</button>
+    <button class="btn pri" onclick="exportPeakXlsx()">ส่งออก Excel (นำเข้า PEAK)</button>
+  </div>
+  <div class="tblwrap"><table><thead><tr><th>รหัสบัญชี</th><th>ชื่อบัญชี</th><th>คำอธิบาย</th><th class="r">เดบิต</th><th class="r">เครดิต</th></tr></thead><tbody>
+    ${L.map(x=>`<tr><td class="num">${esc(x.code)}</td><td>${esc(x.name)}</td><td class="name-cell" style="max-width:280px" title="${esc(x.desc)}">${esc(x.desc)}</td>
+      <td class="r num">${x.dr?fmt(x.dr):''}</td><td class="r num">${x.cr?fmt(x.cr):''}</td></tr>`).join('')}
+  </tbody><tfoot><tr><td colspan="3">รวม ${Math.abs(dr-cr)<0.01?'✓ สมดุล':'⚠ ไม่สมดุล'}</td><td class="r num">${fmt(dr)}</td><td class="r num">${fmt(cr)}</td></tr></tfoot></table></div></div>
+  <div class="panel"><div class="hd"><h3>ขั้นตอนถัดไป (เมื่อจ่ายจริง)</h3></div><div class="bd" style="font-size:12.5px;color:var(--muted)">
+    เมื่อโอนเงินเดือนแล้ว บันทึกล้างบัญชีค้างจ่าย: เดบิต ${esc(S.settings.accounts.salPay.code)} ${esc(S.settings.accounts.salPay.name)} ${fmt(t.net+t.oded)} / เครดิต ${esc(S.settings.accounts.bank.code)} ${esc(S.settings.accounts.bank.name)} — และเมื่อนำส่ง ภ.ง.ด.1 / สปส. / PF ในเดือนถัดไปก็ล้างบัญชีค้างจ่ายแต่ละตัวกับธนาคารเช่นเดียวกัน
+  </div></div>`;
+}
+window.copyPeak=function(){
+  const{L}=peakLines();
+  const txt=['รหัสบัญชี\tชื่อบัญชี\tคำอธิบาย\tเดบิต\tเครดิต',...L.map(x=>[x.code,x.name,x.desc,x.dr||'',x.cr||''].join('\t'))].join('\n');
+  navigator.clipboard.writeText(txt).then(()=>toast('คัดลอกแล้ว — วางใน PEAK หรือ Excel ได้เลย')).catch(()=>{toast('คัดลอกอัตโนมัติไม่ได้ — ใช้ปุ่มส่งออกแทน');});
+};
+function peakAoa(){
+  const{L}=peakLines();const run=getRun(false);const d=((run&&run.payDate)||defaultPayDate()).split('-');
+  const dateTh=d[2]+'/'+d[1]+'/'+d[0];const ref='PAYROLL-'+pkey();
+  const aoa=[['วันที่','เลขที่เอกสาร','อ้างอิง','รหัสบัญชี','ชื่อบัญชี','คำอธิบายรายการ','เดบิต','เครดิต']];
+  for(const x of L)aoa.push([dateTh,'',ref,x.code,x.name,x.desc,x.dr||0,x.cr||0]);
+  return aoa;
+}
+function exportPeakXlsx(){saveFile(`PEAK_JV_Payroll_${pkey()}.xlsx`,aoaToXlsx([{name:'JV',aoa:peakAoa(),widths:[11,12,16,10,34,40,12,12]}]));}
+function exportPeakCsv(){saveFile(`PEAK_JV_Payroll_${pkey()}.csv`,csvOf(peakAoa()));}
+
+/* ---------- settings ---------- */
+function vSet(el){
+  const st=S.settings;const C=S.company;const ac=st.accounts;
+  const acRows=Object.entries({salaryExp:'ค่าใช้จ่าย: เงินเดือนค่าจ้าง',ssoExp:'ค่าใช้จ่าย: ปกส.นายจ้าง',pfExp:'ค่าใช้จ่าย: PF นายจ้าง',
+    whtPay:'หนี้สิน: ภ.ง.ด.1 ค้างจ่าย',ssoPay:'หนี้สิน: ปกส.ค้างจ่าย',pfPay:'หนี้สิน: PF ค้างจ่าย',loanPay:'หนี้สิน: กยศ. รอนำส่ง',salPay:'หนี้สิน: เงินเดือนค้างจ่าย',bank:'สินทรัพย์: ธนาคาร (จ่ายเงินเดือน)'})
+    .map(([k,l])=>`<label style="display:contents"><span style="font-size:11.5px;color:var(--muted);font-weight:600">${l}</span>
+      <span style="display:flex;gap:6px;min-width:0"><input data-ac="${k}.code" value="${esc(ac[k].code)}" style="width:86px"><input data-ac="${k}.name" value="${esc(ac[k].name)}" style="flex:1;min-width:0"></span></label>`).join('');
+  el.innerHTML=`
+  <h2>ตั้งค่า</h2><p class="sub">ข้อมูลบริษัท อัตราเงินสมทบ วิธีคำนวณภาษี ผังบัญชี PEAK และการสำรองข้อมูล</p>
+  <div class="panel"><div class="hd"><h3>บริษัท</h3></div><div class="bd"><div class="fgrid">
+    <label>ชื่อบริษัท (ไทย)<input data-c="nameTH" value="${esc(C.nameTH)}"></label>
+    <label>ชื่อบริษัท (อังกฤษ)<input data-c="nameEN" value="${esc(C.nameEN)}"></label>
+    <label>เลขประจำตัวผู้เสียภาษี (13 หลัก)<input data-c="taxIdCo" value="${esc(C.taxIdCo)}"></label>
+    <label>สาขาที่<input data-c="branch" value="${esc(C.branch)}"></label>
+    <label>เลขที่บัญชีนายจ้าง สปส. (10 หลัก)<input data-c="ssoAccount" value="${esc(C.ssoAccount)}"></label>
+    <label>ธนาคารที่จ่ายเงินเดือน<input data-c="payBankName" value="${esc(C.payBankName)}"></label>
+    <label>เลขบัญชีจ่ายเงินเดือน<input data-c="payBankAcct" value="${esc(C.payBankAcct)}"></label>
+    <label>ชื่อบริษัทในไฟล์ BBL (สูงสุด 25 ตัว)<input data-c="bblName" value="${esc(C.bblName||'CET')}" maxlength="25"></label>
+    <label>บัญชีรับโอนเพื่อนำส่ง ปกส. + กยศ. (SL/SSO)<input data-c="remitAcct" value="${esc(C.remitAcct||'')}" placeholder="เว้นว่าง = ไม่รวมในไฟล์โอน"></label>
+    <label>ชื่อบัญชีรับโอน SL/SSO<input data-c="remitName" value="${esc(C.remitName||'')}"></label>
+  </div></div></div>
+  <div class="panel"><div class="hd"><h3>อัตราและวิธีคำนวณ</h3></div><div class="bd"><div class="fgrid">
+    <label>อัตราประกันสังคม (%)<input data-s="ssoRate" value="${st.ssoRate}"></label>
+    <label>เพดานค่าจ้าง ปกส. (บาท)<input data-s="ssoCeil" value="${st.ssoCeil}"></label>
+    <label>ค่าจ้างขั้นต่ำ ปกส. (บาท)<input data-s="ssoFloor" value="${st.ssoFloor}"></label>
+    <label>วิธีคำนวณภาษีรายเดือน<select data-s="whtMethod">
+      <option value="level" ${st.whtMethod==='level'?'selected':''}>ระดับคงที่ + ภาษีส่วนเพิ่มของเงินได้ครั้งคราว · ธันวาคมปรับให้ครบ (ตรงกับไฟล์ Tax calculation เดิม)</option>
+      <option value="catchup" ${st.whtMethod==='catchup'?'selected':''}>เกลี่ยทั้งปีทุกเดือน: (ภาษีทั้งปี − หักแล้ว) ÷ เดือนคงเหลือ</option>
+      <option value="std12" ${st.whtMethod==='std12'?'selected':''}>มาตรฐาน: ภาษีเงินเดือนทั้งปี ÷ 12 + ภาษีโบนัสในเดือนที่จ่าย</option></select></label>
+    <label>การปัดเศษภาษี<select data-s="whtRound">
+      <option value="baht" ${st.whtRound==='baht'?'selected':''}>ปัดเป็นบาท (ปกติ)</option>
+      <option value="bahtUp" ${st.whtRound==='bahtUp'?'selected':''}>ปัดขึ้นเป็นบาท</option>
+      <option value="satang" ${st.whtRound==='satang'?'selected':''}>ทศนิยม 2 ตำแหน่ง</option></select></label>
+  </div>
+  <p class="sub" style="margin-top:10px">เพดาน ปกส. 17,500 บาทตามประกาศที่ใช้ตั้งแต่ปี 2569 (ลูกจ้างสมทบสูงสุด 875 บาท/เดือน) — แก้ไขได้หากอัตราเปลี่ยน</p>
+  </div></div>
+  <div class="panel"><div class="hd"><h3>ผังบัญชีสำหรับ PEAK</h3></div><div class="bd"><div class="acct-grid">${acRows}</div></div></div>
+  <div class="panel"><div class="hd"><h3>ข้อมูลและการสำรอง</h3></div><div class="bd">
+    <p class="sub">ข้อมูลทั้งหมด (พนักงาน งวดเงินเดือน การตั้งค่า) เก็บในเบราว์เซอร์เครื่องนี้เท่านั้น ไม่ได้ส่งขึ้นเซิร์ฟเวอร์ — สำรองเป็นไฟล์ไว้สม่ำเสมอ</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn pri" onclick="backupAll()">สำรองข้อมูลทั้งหมด (.json)</button>
+      <button class="btn" onclick="document.getElementById('fileRestore').click()">กู้คืนจากไฟล์สำรอง</button>
+      <button class="btn" onclick="go('mpa')">นำเข้าไฟล์ข้อมูล</button>
+      <button class="btn warn" onclick="wipeAll()">ล้างข้อมูลทั้งหมด</button>
+    </div>
+  </div></div>`;
+  el.querySelectorAll('[data-c]').forEach(i=>i.addEventListener('change',()=>{S.company[i.dataset.c]=i.value.trim();queueSave();}));
+  el.querySelectorAll('[data-s]').forEach(i=>i.addEventListener('change',()=>{const k=i.dataset.s;
+    S.settings[k]=(k==='whtMethod'||k==='whtRound')?i.value:num(i.value);queueSave();}));
+  el.querySelectorAll('[data-ac]').forEach(i=>i.addEventListener('change',()=>{const[k,f]=i.dataset.ac.split('.');S.settings.accounts[k][f]=i.value.trim();queueSave();}));
+}
+window.backupAll=function(){saveFile('cet-payroll-backup-'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(S,null,1));};
+let wipeArm=false;
+window.wipeAll=function(){if(!wipeArm){wipeArm=true;toast('กดอีกครั้งเพื่อยืนยันการล้างข้อมูลทั้งหมด');setTimeout(()=>wipeArm=false,4000);return;}
+  S=defaultState();try{localStorage.removeItem(LSKEY);}catch(e){}render();toast('ล้างข้อมูลแล้ว');};
+
+/* ---------- MPA (monthly payroll advice) + supporting documents ---------- */
+const MONTHS_EN=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+const dim=(y,m)=>new Date(y,m,0).getDate();
+function parseDateAny(v){
+  if(v==null||v==='')return null;
+  if(v instanceof Date&&!isNaN(v))return{y:v.getFullYear(),m:v.getMonth()+1,d:v.getDate()};
+  if(typeof v==='number'&&v>20000&&typeof XLSX!=='undefined'){const d=XLSX.SSF.parse_date_code(v);return d?{y:d.y,m:d.m,d:d.d}:null;}
+  const s=String(v);let x;
+  const fixY=y=>{y=Number(y);if(y<100)y+=2000;if(y>2400)y-=543;return y;};
+  if((x=s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/)))return{y:Number(x[1]),m:Number(x[2]),d:Number(x[3])};
+  if((x=s.match(/(\d{1,2})\s*[\/.\-]\s*(\d{1,2})\s*[\/.\-]\s*(\d{2,4})/)))return{y:fixY(x[3]),m:Number(x[2]),d:Number(x[1])};
+  if((x=s.match(/(\d{1,2})[\s\-]+([A-Za-z]{3,})[\s\-',.]+(\d{2,4})/))){const mi=MONTHS_EN.indexOf(x[2].slice(0,3).toLowerCase());if(mi>=0)return{y:fixY(x[3]),m:mi+1,d:Number(x[1])};}
+  return null;
+}
+const dstr=d=>d?String(d.d).padStart(2,'0')+'/'+String(d.m).padStart(2,'0')+'/'+d.y:'';
+const dym=d=>d?ym(d.y,d.m):'';
+function normName(s){return String(s||'').toLowerCase().replace(/^\s*(mrs|mr|ms|miss|dr|นางสาว|นาง|นาย)\.?\s*/,'').replace(/[^a-z฀-๿ ]+/g,' ').replace(/\s+/g,' ').trim();}
+function lev(a,b){const m=a.length,n=b.length;if(!m)return n;if(!n)return m;let p=Array.from({length:n+1},(_,j)=>j);
+  for(let i=1;i<=m;i++){const c=[i];for(let j=1;j<=n;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=c;}return p[n];}
+function matchEmp(code,name){
+  code=String(code||'').trim();
+  if(code&&S.employees.some(e=>e.code===code))return{code,conf:'code'};
+  const t=normName(name).split(' ').filter(Boolean);if(!t.length)return{code:'',conf:'none'};
+  let best=[],bs=0;
+  for(const e of S.employees){
+    const u=normName(e.name).split(' ').filter(Boolean);if(!u.length)continue;let s=0;
+    if(u[0]===t[0])s+=3;else if(lev(u[0],t[0])<=1&&t[0].length>3)s+=2;
+    const tl=t[t.length-1],ul=u[u.length-1];
+    if(t.length>1){if(ul===tl)s+=3;else if(lev(ul,tl)<=2&&tl.length>3)s+=2;else if(u.slice(1).some(w=>w===tl||(tl.length>3&&lev(w,tl)<=1)))s+=2;}
+    for(const w of t.slice(1,-1))if(u.includes(w))s+=1;
+    if(s>bs){bs=s;best=[e];}else if(s===bs&&s>0)best.push(e);
+  }
+  if(bs>=3&&best.length===1){const active=best[0];return{code:active.code,conf:bs>=5?'name':'weak'};}
+  if(bs>=3&&best.length>1){const act=best.filter(e=>e.status!=='resigned');if(act.length===1)return{code:act[0].code,conf:'weak'};}
+  return{code:'',conf:'none'};
+}
+function nextCode(taken){let mx=0;for(const e of S.employees){const x=String(e.code).match(/^CET(\d+)$/);if(x)mx=Math.max(mx,Number(x[1]));}
+  for(const c of taken||[]){const x=String(c).match(/^CET(\d+)$/);if(x)mx=Math.max(mx,Number(x[1]));}return 'CET'+String(mx+1).padStart(3,'0');}
+function fmtAcct(v){const s=String(v||'');const inner=(s.match(/\(([^)]*)\)/)||[])[1]||s;const d=digits(inner);
+  return d.length===10?d.slice(0,3)+'-'+d[3]+'-'+d.slice(4,9)+'-'+d[9]:(d||'');}
+function findHeader(aoa){for(let i=0;i<Math.min(aoa.length,15);i++){const c=String((aoa[i]||[])[0]||'').trim().toLowerCase();if(c.startsWith('action')||c.startsWith('employee no'))return i;}return -1;}
+function colMap(hdrRow,keys){const h=(hdrRow||[]).map(v=>String(v==null?'':v).replace(/\s+/g,' ').trim().toLowerCase());const m={};
+  for(const[k,pats]of Object.entries(keys)){for(const p of pats){const i=h.findIndex(x=>x.startsWith(p)||x.includes(p));if(i>=0&&!Object.values(m).includes(i)){m[k]=i;break;}}}return m;}
+const EMP_KEYS={action:['action'],code:['employee no'],name:['name (english)','name'],given:['given name'],surname:['surname'],prefix:['prefix'],nid:['national identification'],passport:['passport'],email:['corporate email'],joined:['date joined'],designation:['designation'],hourly:['hourly rate'],salary:['monthly salary','monthly'],bank:['bank account'],taxpayer:['taxpayer number'],remark:['remark']};
+const RES_KEYS={code:['employee no'],name:['name'],last:['last employment'],al:['annual leave'],notice:['notice in lieu'],remark:['remarks','remark']};
+const PD_KEYS={action:['action'],code:['employee no'],prefix:['prefix'],name:['name'],type:['type'],item:['allowance / deduction','allowance'],amount:['amount'],remark:['remarks','remark'],eff:['effective'],exp:['expiry']};
+function isMpaWorkbook(wb){return wb.SheetNames.some(s=>/^pay-?ded\d{4}$/i.test(s.trim()))&&wb.SheetNames.some(s=>/^employee\d{4}$/i.test(s.trim()));}
+function parseMpa(wb,fileName){
+  const lines=[];let period=null;
+  for(const name of wb.SheetNames){
+    const nm=name.trim();const k=/^employee(\d{2})(\d{2})$/i.exec(nm)?'emp':/^resignation(\d{2})(\d{2})$/i.exec(nm)?'res':/^pay-?ded(\d{2})(\d{2})$/i.exec(nm)?'pd':null;
+    if(!k)continue;const pm=nm.match(/(\d{2})(\d{2})$/);period=ym(2000+Number(pm[2]),Number(pm[1]));
+    const aoa=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:null});
+    const h=findHeader(aoa);if(h<0)continue;
+    const c=colMap(aoa[h],k==='emp'?EMP_KEYS:k==='res'?RES_KEYS:PD_KEYS);
+    const g=(row,key)=>c[key]!=null?row[c[key]]:null;const gs=(row,key)=>{const v=g(row,key);return v==null?'':String(v).trim();};
+    for(let i=h+1;i<aoa.length;i++){
+      const row=aoa[i]||[];
+      const nmv=gs(row,'name')||[gs(row,'given'),gs(row,'surname')].filter(Boolean).join(' ');
+      if(!nmv||/^(n\/a|no new employee|-)$/i.test(nmv))continue;
+      const L={id:k+'-'+i,kind:k,sheet:name,row:i+1,action:gs(row,'action').toUpperCase().slice(0,1),codeIn:gs(row,'code'),name:nmv,include:true};
+      if(k==='emp'){
+        Object.assign(L,{prefix:gs(row,'prefix'),given:gs(row,'given'),surname:gs(row,'surname'),email:gs(row,'email'),designation:gs(row,'designation'),
+          joined:dstr(parseDateAny(g(row,'joined'))),joinedRaw:gs(row,'joined'),salary:num(g(row,'salary')),hourly:num(g(row,'hourly')),bank:fmtAcct(g(row,'bank')),
+          taxId:digits(gs(row,'taxpayer'))||digits(gs(row,'nid')),remark:gs(row,'remark')});
+        if(L.taxId.length!==13)L.taxId='';
+      }else if(k==='res'){
+        Object.assign(L,{last:dstr(parseDateAny(g(row,'last'))),lastRaw:gs(row,'last'),al:num(g(row,'al')),notice:num(g(row,'notice')),remark:gs(row,'remark')});
+      }else{
+        const typeTxt=gs(row,'type');const amt=g(row,'amount');
+        Object.assign(L,{type:(typeTxt.match(/^\s*(\d)/)||[])[1]||'3',typeTxt,item:gs(row,'item'),amount:typeof amt==='number'?amt:num(amt),amountRaw:amt==null?'':String(amt),
+          remark:gs(row,'remark'),eff:dstr(parseDateAny(g(row,'eff'))),exp:dstr(parseDateAny(g(row,'exp')))});
+        if(!L.amount&&!/^\s*-?[\d,.]+\s*$/.test(L.amountRaw))L.warn='ไม่พบจำนวนเงินในช่อง Amount';
+      }
+      const mt=matchEmp(L.codeIn,L.name);L.code=mt.code;L.conf=mt.conf;
+      if(k==='emp'&&L.action!=='C'&&!L.code){L.newCode=L.codeIn||'';}
+      if(!L.code&&!(k==='emp'&&L.action!=='C'))L.include=false;
+      lines.push(L);
+    }
+  }
+  const taken=[];for(const L of lines)if(L.kind==='emp'&&!L.code){if(!L.newCode)L.newCode=nextCode(taken);taken.push(L.newCode);}
+  return{file:fileName,period,importedAt:new Date().toISOString(),lines};
+}
+function pdClass(L){
+  const t=(L.item+' '+L.remark).toLowerCase();
+  if(L.type==='2')return L.amount<0?'recDed':'recurring';
+  if(/pvf|provident|กองทุนสำรอง/.test(t))return 'pvfAdj';
+  if(L.type==='1'){const e=S.employees.find(x=>x.code===L.code);
+    if(/hourly|hour|ชั่วโมง/.test(t)||!e||Math.abs(L.amount)>=0.5*num(e.salary))return L.eff&&!/hourly|hour/.test(t)?'salaryChange':'salaryMonth';}
+  if(L.amount<0&&/unpaid|salary deduction|leave|ขาดงาน|ลาไม่รับ/.test(t))return 'unpaid';
+  if(L.amount>0&&/salary|เงินเดือน/.test(L.item.toLowerCase()))return 'salaryPlus';
+  if(/\bot\b|overtime|success fee|service ?fee|ค่าล่วงเวลา/.test(t))return 'ot';
+  return L.amount<0?'deduct':'addition';
+}
+/* the changes one MPA line makes, for the period it belongs to */
+function opsFor(L,period){
+  const [py,pm]=period.split('-').map(Number);const ops=[];let desc='',warn=L.warn||'';
+  const e=S.employees.find(x=>x.code===L.code);
+  if(L.kind==='emp'){
+    const j=parseDateAny(L.joined);
+    if(L.action==='C'&&e){
+      const f={};if(L.salary)f.salary=L.salary;if(L.bank)f.bankAcct=L.bank;if(L.designation)f.position=L.designation;if(L.taxId)f.taxId=L.taxId;if(L.email)f.email=L.email;
+      ops.push({t:'empSet',code:e.code,fields:f});
+      desc='แก้ไขข้อมูล: '+(Object.entries(f).map(([k,v])=>({salary:'เงินเดือน '+fmt(v),bankAcct:'บัญชี '+v,position:'ตำแหน่ง '+v,taxId:'เลขภาษี '+v,email:'อีเมล'}[k])).join(' · ')||'ไม่มีช่องที่เปลี่ยน');
+      if(f.salary&&Math.abs(f.salary-num(e.salary))>0.005)warn='ปรับเงินเดือน '+fmt(num(e.salary))+' → '+fmt(f.salary)+' — ถ้ามีผลระหว่างเดือน ให้แก้เงินเดือนเดือนนี้ตามสัดส่วนวัน';
+    }else{
+      const code=L.code||L.newCode;const sal=L.salary||num(e&&e.salary);
+      const emp={code,name:[L.prefix&&!/^(mr|mrs|ms|miss)\b/i.test(L.name)?L.prefix:'',L.name].filter(Boolean).join(' ').replace(/\s+/g,' '),
+        taxId:L.taxId,email:L.email,position:L.designation,salary:sal,bankAcct:L.bank,startYM:dym(j)||period,status:'active',pfRate:0,
+        allowances:{self:60000},startNote:'start '+(L.joined||L.joinedRaw)};
+      if(e){const f={};for(const k of['salary','bankAcct','position','taxId','email'])if(emp[k])f[k]=emp[k];ops.push({t:'empSet',code,fields:f});}
+      else ops.push({t:'newEmp',code,fields:emp});
+      desc=(e?'พนักงานเดิม '+code+' (ข้อมูลใหม่) ':'พนักงานใหม่ '+code)+' · เงินเดือน '+fmt(sal)+' · เริ่ม '+(L.joined||L.joinedRaw||'?');
+      if(j&&j.y===py&&j.m===pm&&j.d>1&&sal){const pr=r2(sal*(dim(py,pm)-j.d+1)/dim(py,pm));ops.push({t:'run',code,field:'salaryOverride',mode:'set',value:pr});desc+=` · เดือนแรก ${dim(py,pm)-j.d+1}/${dim(py,pm)} วัน = ${fmt(pr)}`;}
+      if(j&&(j.y<py||(j.y===py&&j.m<pm)))warn='เริ่มงานก่อนงวดนี้ — ตรวจว่าต้องจ่ายย้อนหลังหรือไม่';
+      if(!sal)warn='ไม่พบเงินเดือนใน MPA — กรอกในหน้าพนักงาน';
+      if(!L.taxId)warn=(warn?warn+' · ':'')+'ไม่มีเลขผู้เสียภาษี';
+    }
+  }else if(L.kind==='res'){
+    const d=parseDateAny(L.last);
+    if(e&&d){ops.push({t:'resign',code:e.code,ym:dym(d)});desc='ลาออก วันสุดท้าย '+L.last;
+      if(d.y===py&&d.m===pm&&d.d<dim(py,pm)){const pr=r2(num(e.salary)*d.d/dim(py,pm));ops.push({t:'run',code:e.code,field:'salaryOverride',mode:'set',value:pr});desc+=` · เดือนสุดท้าย ${d.d}/${dim(py,pm)} วัน = ${fmt(pr)}`;}
+      else if(d.y<py||(d.y===py&&d.m<pm))desc+=' · ไม่มีเงินเดือนงวดนี้';
+      if(L.al||L.notice)warn='มีวันลาพักร้อน/ค่าตกใจ — เพิ่มในช่องเงินได้อื่นเอง';}
+    else desc=d?'':'อ่านวันที่ไม่ได้';
+  }else{
+    const cls=pdClass(L);const a=num(L.amount);
+    if(e)switch(cls){
+      case 'recurring':ops.push({t:'recurring',code:e.code,item:{label:L.item,amount:a,fromYM:dym(parseDateAny(L.eff))||'',toYM:dym(parseDateAny(L.exp))||''}});
+        desc=`เงินเพิ่มประจำ ${fmt(a)}/เดือน ${L.eff?'ตั้งแต่ '+L.eff:''} ${L.exp?'ถึง '+L.exp:'(ไม่มีกำหนด)'} → ช่อง Incentive`;break;
+      case 'recDed':ops.push({t:'run',code:e.code,field:'otherDed',mode:'add',value:-a});desc=`รายการหักประจำ ${fmt(-a)} → หักอื่น (เดือนนี้)`;warn='รายการหักประจำ — ต้องใส่ทุกเดือน';break;
+      case 'salaryMonth':ops.push({t:'run',code:e.code,field:'salaryOverride',mode:'set',value:a});desc=`เงินเดือนเดือนนี้ = ${fmt(a)}`;break;
+      case 'salaryChange':{const f=parseDateAny(L.eff);ops.push({t:'empSet',code:e.code,fields:{salary:a}});desc=`ปรับเงินเดือนเป็น ${fmt(a)} มีผล ${L.eff}`;
+        if(f&&(f.y<py||(f.y===py&&f.m<pm)))warn='มีผลย้อนหลัง — ตรวจเงินตกเบิก';break;}
+      case 'unpaid':ops.push({t:'run',code:e.code,field:'salaryOverride',mode:'addSal',value:a});desc=`หักเงินเดือน ${fmt(-a)} (ลาไม่รับค่าจ้าง) → ลดเงินเดือนเดือนนี้`;break;
+      case 'pvfAdj':ops.push({t:'run',code:e.code,field:'otherDed',mode:'add',value:-a});desc=a>0?`คืนเงินหัก PF ${fmt(a)} → หักอื่น −${fmt(a)} (ไม่เสียภาษี)`:`หักเงินสมทบ PF ${fmt(-a)} → หักอื่น`;break;
+      case 'salaryPlus':{const m=(L.remark+' '+L.item).match(/salary\s*(?:of\s*)?([\d,]+(?:\.\d+)?)/i);
+        let sp=m?num(m[1]):num(e.salary);if(sp>a)sp=a;
+        ops.push({t:'run',code:e.code,field:'salaryOverride',mode:'set',value:sp});if(a-sp>0)ops.push({t:'run',code:e.code,field:'otherAdd',mode:'add',value:r2(a-sp)});
+        desc=`แยกเป็นเงินเดือน ${fmt(sp)} + เงินได้อื่น ${fmt(r2(a-sp))}`;warn='รายการนี้รวมเงินเดือนไว้แล้ว — ตรวจการแยกยอด';break;}
+      case 'ot':ops.push({t:'run',code:e.code,field:'ot',mode:'add',value:a});desc=`${L.item} ${fmt(a)} → OT/Success fee`;break;
+      case 'deduct':ops.push({t:'run',code:e.code,field:'otherDed',mode:'add',value:-a});desc=`${L.item} ${fmt(-a)} → หักอื่น`;warn='ตรวจว่าเป็นรายการลดเงินได้ (กระทบภาษี) หรือหักหลังภาษี';break;
+      default:ops.push({t:'run',code:e.code,field:'otherAdd',mode:'add',value:a});desc=`${L.item} ${fmt(a)} → เงินได้อื่น (เสียภาษี)`;
+    }
+    L.cls=cls;
+  }
+  if(!e&&!(L.kind==='emp'&&L.action!=='C'))desc='ไม่พบพนักงาน — เลือกพนักงานก่อน';
+  return{ops,desc,warn};
+}
+function undoMpa(run){
+  for(const rec of (run.mpaApplied||[]).slice().reverse()){
+    const row=run.rows[rec.code];if(!row)continue;
+    if(rec.mode==='add')row[rec.field]=r2(num(row[rec.field])-rec.value);
+    else row[rec.field]=rec.prev;
+  }
+  run.mpaApplied=[];
+}
+function applyMpa(run,period){
+  undoMpa(run);const [py]=period.split('-').map(Number);const log=[];let n=0;
+  for(const L of run.mpa.lines){
+    if(!L.include)continue;const {ops}=opsFor(L,period);
+    for(const op of ops){
+      if(op.t==='newEmp'){let e=S.employees.find(x=>x.code===op.code);if(e)Object.assign(e,op.fields);else S.employees.push(Object.assign({},op.fields));}
+      else if(op.t==='empSet'){const e=S.employees.find(x=>x.code===op.code);if(e)Object.assign(e,op.fields);}
+      else if(op.t==='resign'){const e=S.employees.find(x=>x.code===op.code);if(e){e.status='resigned';e.resignYM=op.ym;}}
+      else if(op.t==='recurring'){const e=S.employees.find(x=>x.code===op.code);if(e){
+        const w=s=>normName(s).split(' ')[0]||'';
+        e.recurring=(e.recurring||[]).filter(it=>!(w(it.label)&&w(it.label)===w(op.item.label))&&Math.abs(num(it.amount)-num(op.item.amount))>0.005);
+        e.recurring.push(op.item);}}
+      else if(op.t==='run'){
+        const row=rowOf(run,op.code);const e=S.employees.find(x=>x.code===op.code);
+        if(op.mode==='add'){row[op.field]=r2(num(row[op.field])+op.value);log.push({code:op.code,field:op.field,mode:'add',value:op.value});}
+        else if(op.mode==='addSal'){const prev=row.salaryOverride;const base=prev!=null?num(prev):num(e&&e.salary);row.salaryOverride=r2(base+op.value);log.push({code:op.code,field:'salaryOverride',mode:'set',prev});}
+        else{const prev=row[op.field];row[op.field]=op.value;log.push({code:op.code,field:op.field,mode:'set',prev});}
+      }
+      n++;
+    }
+  }
+  run.mpaApplied=log;return n;
+}
+
+/* supporting documents: names only, classified and tied to MPA lines */
+const DOC_TYPES={timesheet:'ใบลงเวลา / OT',pfreg:'สมัคร/ปรับอัตรา PF',loryor:'ล.ย.01 ค่าลดหย่อน',resign:'จดหมายลาออก',binder:'แฟ้มพนักงานใหม่ (Binder)',
+  successfee:'รายงาน Success fee',bank:'สมุดบัญชี / เปลี่ยนบัญชี',promotion:'เลื่อนตำแหน่ง / ปรับเงินเดือน',leave:'ใบลา',workpermit:'Work permit',sso:'ประกันสังคม',loan:'กยศ.',approval:'อนุมัติ / อื่น ๆ',other:'อื่น ๆ'};
+function docType(fn){const s=fn.toLowerCase();
+  if(/time ?(attendance|sheet)|timesheet/.test(s))return 'timesheet';
+  if(/provident|pvf/.test(s))return 'pfreg';
+  if(/lor ?yor|loryor|loyal01|ล\.?ย\.?\s?0?1|tax deduction/.test(s))return 'loryor';
+  if(/resign/.test(s))return 'resign';
+  if(/b[l]?inder/.test(s))return 'binder';
+  if(/success fee|service fee|variables/.test(s))return 'successfee';
+  if(/book ?bank|bank account/.test(s))return 'bank';
+  if(/promotion|new salary|increment/.test(s))return 'promotion';
+  if(/leave/.test(s))return 'leave';
+  if(/work ?permit/.test(s))return 'workpermit';
+  if(/^sso|sso[ -]/.test(s))return 'sso';
+  if(/กยศ|student loan|rd_debt/.test(s))return 'loan';
+  if(/approv/.test(s))return 'approval';
+  return 'other';}
+function docEmp(fn){
+  const base=fn.replace(/\.[a-z0-9]+$/i,'').replace(/\(\d+\)/g,' ');
+  const parts=base.split(/_| - |-(?=[A-Z])/).map(s=>s.trim()).filter(Boolean);
+  for(const p of parts.reverse()){const m=matchEmp('',p.replace(/[0-9]/g,' '));if(m.code)return m.code;}
+  const m=base.match(/([A-Z][a-z]+)(?:\s+([A-Z][a-z]+))?/g)||[];
+  for(const w of m){const r=matchEmp('',w);if(r.code&&r.conf!=='weak')return r.code;}
+  return '';}
+const DOC_FOR_LINE={emp:['binder','approval','workpermit'],res:['resign'],ot:['timesheet'],unpaid:['leave'],salaryMonth:['timesheet','approval','workpermit'],
+  salaryChange:['promotion','approval'],salaryPlus:['resign','approval','successfee'],recurring:['approval','other'],addition:['successfee','approval','other'],pvfAdj:['pfreg','approval'],deduct:['approval','other'],recDed:['approval','other']};
+function lineNeeds(L){return L.kind==='pd'?(DOC_FOR_LINE[L.cls||pdClass(L)]||[]):DOC_FOR_LINE[L.kind]||[];}
+function docCheck(run){
+  const lines=(run.mpa&&run.mpa.lines||[]).filter(L=>L.include&&L.code||L.include&&L.kind==='emp');
+  const docs=run.docs||[];
+  const noDoc=lines.filter(L=>{const code=L.code||L.newCode;const need=lineNeeds(L);
+    return !docs.some(d=>d.code===code&&(need.includes(d.type)||d.type==='approval'));});
+  const hints=[];
+  for(const d of docs){
+    const e=S.employees.find(x=>x.code===d.code);
+    if(d.type==='pfreg'&&e)hints.push({d,txt:`${e.code}: เอกสาร PF — ตรวจ/ตั้งอัตรา PF ลูกจ้าง (ตอนนี้ ${num(e.pfRate)}%) และอัตรานายจ้าง`});
+    if(d.type==='loryor'&&e)hints.push({d,txt:`${e.code}: ล.ย.01 — ปรับค่าลดหย่อนในหน้าพนักงาน แล้วกด "คำนวณระดับภาษีใหม่"`});
+    if(d.type==='bank'&&e)hints.push({d,txt:`${e.code}: เปลี่ยนบัญชีธนาคาร — ตอนนี้ ${e.bankAcct||'ไม่มี'}`});
+    if(d.type==='loan'&&e)hints.push({d,txt:`${e.code}: กยศ. — ตรวจยอดหักต่อเดือน (ตอนนี้ ${fmt(num(e.loanMonthly))})`});
+    if(d.code&&!lines.some(L=>(L.code||L.newCode)===d.code)&&['timesheet','resign','binder','promotion','leave','successfee'].includes(d.type))
+      hints.push({d,txt:`${d.code}: มีเอกสาร "${DOC_TYPES[d.type]}" แต่ไม่มีรายการใน MPA`});
+  }
+  return{noDoc,hints};
+}
+
+/* previous month comparison */
+function prevMonthNet(emp,y,m){
+  let py=y,pm=m-1;if(pm<1){pm=12;py--;}
+  const run=S.runs[ym(py,pm)];const row=run&&run.rows[emp.code];
+  if(run&&run.status==='locked'&&row)return calcRow(emp,row,py,pm,false).transfer;
+  if(py===S.historyYear&&emp.history2026&&pm<=S.historyThroughMonth){const h=emp.history2026.net||{};const v=h[pm]!=null?h[pm]:h[String(pm)];
+    if(v!=null)return num(v);
+    const g=k=>{const o=emp.history2026[k]||{};return num(o[pm]!=null?o[pm]:o[String(pm)]);};
+    const inc=g('income')+g('other');return inc?r2(inc-g('wht')-g('ssf')-g('pf')-g('loan')-g('oded')):null;}
+  if(run&&row)return calcRow(emp,row,py,pm,false).transfer;
+  return null;
+}
+
+function addDocs(files,quiet){
+  const run=getRun(true);run.docs=run.docs||[];let n=0;
+  for(const f of files){if(run.docs.some(d=>d.name===f.name))continue;run.docs.push({name:f.name,size:f.size,type:/^CET \d{6}\.txt$|bbl_payroll/i.test(f.name)?'bank':docType(f.name),code:docEmp(f.name),checked:false});n++;}
+  queueSave();if(!quiet){render();toast(`เพิ่มเอกสาร ${n} ไฟล์`);}
+}
+window.gotoPeriod=function(k){const[y,m]=k.split('-').map(Number);P={y,m};try{sessionStorage.setItem('cet.period',y+'-'+m);}catch(e){}render();};
+let regenArm=false;
+window.applyMpaNow=function(regen){
+  const run=getRun(true);if(!run.mpa)return;
+  if(regen){
+    const edited=Object.keys(run.rows).length;
+    if(edited&&!regenArm){regenArm=true;setTimeout(()=>regenArm=false,4000);toast(`กดอีกครั้งเพื่อยืนยัน — จะล้างการแก้ไขในงวดนี้ ${edited} แถวแล้วสร้างใหม่`);return;}
+    regenArm=false;run.rows={};run.mpaApplied=[];
+  }
+  const n=applyMpa(run,pkey());queueSave();go('run');
+  toast(regen?`สร้างงวด ${pkey()} ใหม่แล้ว: งวดก่อน + MPA ${n} การเปลี่ยนแปลง`:`นำ MPA ไปใช้แล้ว ${n} การเปลี่ยนแปลง`);
+};
+function handleMpaWorkbook(wb,fileName){
+  const parsed=parseMpa(wb,fileName);
+  if(parsed.period&&parsed.period!==pkey()){const[y,m]=parsed.period.split('-').map(Number);P={y,m};try{sessionStorage.setItem('cet.period',y+'-'+m);}catch(e){}}
+  const run=getRun(true);
+  if(run.status==='locked'){toast('งวด '+pkey()+' ปิดแล้ว — เปิดงวดก่อนนำเข้า MPA');go('mpa');return;}
+  const prevApplied=run.mpaApplied||[];
+  run.mpa=parsed;run.mpaApplied=prevApplied;
+  queueSave();go('mpa');
+  toast(`อ่าน MPA ${parsed.lines.length} รายการ (งวด ${parsed.period||pkey()}) — ตรวจแล้วกด "สร้างงวดใหม่"`);
+}
+
+/* ---------- password-protected Excel files (ECMA-376 Agile encryption), decrypted in this browser only ---------- */
+const BK_VERIFIER_INPUT=[0xfe,0xa7,0xd2,0x76,0x3b,0x4b,0x9e,0x79],BK_VERIFIER_HASH=[0xd7,0xaa,0x0f,0x6d,0x30,0x61,0x34,0x4e],BK_KEY=[0x14,0x6e,0x0b,0xe7,0xab,0xac,0xd0,0xd6];
+const u8cat=(...a)=>{const n=a.reduce((s,x)=>s+x.length,0);const o=new Uint8Array(n);let p=0;for(const x of a){o.set(x,p);p+=x.length;}return o;};
+const u32le=i=>{const b=new Uint8Array(4);new DataView(b.buffer).setUint32(0,i,true);return b;};
+const b64u8=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+/* minimal compound-file (OLE) reader: just enough to pull EncryptionInfo / EncryptedPackage out of an encrypted workbook */
+function cfbOpen(u8){
+  const dv=new DataView(u8.buffer,u8.byteOffset,u8.byteLength);
+  const ss=1<<dv.getUint16(0x1E,true),mss=1<<dv.getUint16(0x20,true),cutoff=dv.getUint32(0x38,true);
+  const off=s=>(s+1)*ss,END=0xFFFFFFFE;
+  const difat=[];for(let i=0;i<109;i++){const v=dv.getUint32(0x4C+i*4,true);if(v<END)difat.push(v);}
+  let ds=dv.getUint32(0x44,true);for(let k=0;ds<END&&k<10000;k++){const n=ss/4-1;for(let i=0;i<n;i++){const v=dv.getUint32(off(ds)+i*4,true);if(v<END)difat.push(v);}ds=dv.getUint32(off(ds)+n*4,true);}
+  const fat=new Uint32Array(difat.length*ss/4);difat.forEach((s,i)=>{for(let j=0;j<ss/4;j++)fat[i*ss/4+j]=dv.getUint32(off(s)+j*4,true);});
+  const chain=(start,table)=>{const out=[];for(let s=start,k=0;s<END&&k<1e6;k++){out.push(s);s=table[s];}return out;};
+  const readChain=start=>{const c=chain(start,fat);const o=new Uint8Array(c.length*ss);c.forEach((s,i)=>o.set(u8.subarray(off(s),off(s)+ss),i*ss));return o;};
+  const dir=readChain(dv.getUint32(0x30,true));const ddv=new DataView(dir.buffer);const entries=[];
+  for(let p=0;p+128<=dir.length;p+=128){const nl=ddv.getUint16(p+0x40,true);if(!nl)continue;let name='';for(let i=0;i<nl/2-1;i++)name+=String.fromCharCode(ddv.getUint16(p+i*2,true));
+    entries.push({name,type:dir[p+0x42],start:ddv.getUint32(p+0x74,true),size:ddv.getUint32(p+0x78,true)});}
+  const root=entries.find(e=>e.type===5);const ms=root?readChain(root.start):new Uint8Array(0);
+  const mfStart=dv.getUint32(0x3C,true);const mfBytes=mfStart<END?readChain(mfStart):new Uint8Array(0);const mfat=new Uint32Array(mfBytes.buffer,0,mfBytes.length/4);
+  return{entries,read(name){const e=entries.find(x=>x.name===name&&x.type===2);if(!e)return null;
+    if(e.size<cutoff){const c=chain(e.start,mfat);const o=new Uint8Array(c.length*mss);c.forEach((s,i)=>o.set(ms.subarray(s*mss,(s+1)*mss),i*mss));return o.slice(0,e.size);}
+    return readChain(e.start).slice(0,e.size);}};
+}
+function isEncryptedXlsx(u8){
+  if(!(u8&&u8[0]===0xD0&&u8[1]===0xCF&&u8[2]===0x11&&u8[3]===0xE0))return false;
+  try{const c=cfbOpen(u8);return c.entries.some(e=>e.name==='EncryptedPackage');}catch(e){return false;}
+}
+const algo=h=>({SHA1:'SHA-1',SHA256:'SHA-256',SHA384:'SHA-384',SHA512:'SHA-512'}[String(h||'').toUpperCase().replace('-','')]||'SHA-512');
+async function digest(alg,u8){return new Uint8Array(await crypto.subtle.digest(alg,u8));}
+/* AES-CBC without padding: WebCrypto insists on PKCS#7, so append one block that decrypts to a full padding block */
+async function aesCbcNoPad(key,iv,data){
+  const last=data.slice(data.length-16);
+  const extra=new Uint8Array(await crypto.subtle.encrypt({name:'AES-CBC',iv:last},key,new Uint8Array(16).fill(16))).slice(0,16);
+  return new Uint8Array(await crypto.subtle.decrypt({name:'AES-CBC',iv},key,u8cat(data,extra)));
+}
+const aesKey=raw=>crypto.subtle.importKey('raw',raw,{name:'AES-CBC'},false,['encrypt','decrypt']);
+function xmlAttrs(xml,tag){const m=xml.match(new RegExp('<(?:\\w+:)?'+tag+'\\s([^>]*?)\\/?>'));if(!m)return null;const o={};for(const a of m[1].matchAll(/([\w:]+)="([^"]*)"/g))o[a[1]]=a[2];return o;}
+async function decryptAgile(u8,password,onProgress){
+  if(!(globalThis.crypto&&crypto.subtle))throw new Error('เบราว์เซอร์นี้ถอดรหัสไม่ได้ — เปิดแอปผ่านลิงก์ https://claude.ai แล้วลองอีกครั้ง');
+  const cfb=cfbOpen(u8);
+  const info=cfb.read('EncryptionInfo'),pkg=cfb.read('EncryptedPackage');
+  if(!info||!pkg)throw new Error('ไม่ใช่ไฟล์ Excel ที่เข้ารหัส');
+  const ver=new DataView(info.buffer,info.byteOffset).getUint16(0,true),minor=new DataView(info.buffer,info.byteOffset).getUint16(2,true);
+  if(!(ver===4&&minor===4))throw new Error('รูปแบบการเข้ารหัสนี้ยังไม่รองรับ (รองรับเฉพาะ Excel 2010 ขึ้นไป)');
+  const xml=new TextDecoder().decode(info.slice(8));
+  const kd=xmlAttrs(xml,'keyData'),ek=xmlAttrs(xml,'encryptedKey');
+  if(!kd||!ek)throw new Error('อ่านข้อมูลการเข้ารหัสไม่ได้');
+  const hAlg=algo(ek.hashAlgorithm),spin=Number(ek.spinCount),ekSalt=b64u8(ek.saltValue),keyLen=Number(ek.keyBits)/8;
+  const pw=new Uint8Array(password.length*2);for(let i=0;i<password.length;i++){const c=password.charCodeAt(i);pw[i*2]=c&255;pw[i*2+1]=c>>8;}
+  let h=await digest(hAlg,u8cat(ekSalt,pw));
+  const it=new Uint8Array(4+h.length);const dv=new DataView(it.buffer);
+  for(let i=0;i<spin;i++){dv.setUint32(0,i,true);it.set(h,4);h=await digest(hAlg,it);if(onProgress&&i%10000===0)onProgress(i/spin*0.6);}
+  const derive=async bk=>{let k=await digest(hAlg,u8cat(h,new Uint8Array(bk)));if(k.length<keyLen){const p=new Uint8Array(keyLen).fill(0x36);p.set(k);k=p;}return aesKey(k.slice(0,keyLen));};
+  const vin=(await aesCbcNoPad(await derive(BK_VERIFIER_INPUT),ekSalt,b64u8(ek.encryptedVerifierHashInput))).slice(0,ekSalt.length);
+  const vhash=(await aesCbcNoPad(await derive(BK_VERIFIER_HASH),ekSalt,b64u8(ek.encryptedVerifierHashValue)));
+  const calc=await digest(hAlg,vin);
+  if(!calc.every((b,i)=>b===vhash[i]))throw new Error('รหัสผ่านไม่ถูกต้อง');
+  const secret=(await aesCbcNoPad(await derive(BK_KEY),ekSalt,b64u8(ek.encryptedKeyValue))).slice(0,Number(kd.keyBits)/8);
+  const key=await aesKey(secret);
+  const kdSalt=b64u8(kd.saltValue),kdAlg=algo(kd.hashAlgorithm),bs=Number(kd.blockSize)||16;
+  const dvp=new DataView(pkg.buffer,pkg.byteOffset);const size=dvp.getUint32(0,true)+dvp.getUint32(4,true)*4294967296;
+  const data=pkg.slice(8);const out=new Uint8Array(Math.ceil(data.length/4096)*4096);let pos=0;
+  const nSeg=Math.ceil(data.length/4096);
+  for(let s=0;s<nSeg;s++){
+    let chunk=data.slice(s*4096,(s+1)*4096);if(chunk.length%16)chunk=u8cat(chunk,new Uint8Array(16-chunk.length%16));
+    const iv=(await digest(kdAlg,u8cat(kdSalt,u32le(s)))).slice(0,bs);
+    const dec=await aesCbcNoPad(key,iv,chunk);out.set(dec,pos);pos+=dec.length;
+    if(onProgress&&s%100===0)onProgress(0.6+0.4*s/nSeg);
+  }
+  return out.slice(0,size);
+}
+/* ---------- CET payroll register workbook ("MM. Payroll_MonYYYY_CET and CEST.xlsx"): import as actuals, export in the same layout ---------- */
+const MON3=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+const MONTH_FULL=['january','february','march','april','may','june','july','august','september','october','november','december'];
+const sheetAoa=(wb,name)=>XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:null});
+const txt=v=>String(v==null?'':v).replace(/\s+/g,' ').trim();
+function registerSheets(wb){
+  const out=[];
+  for(const name of wb.SheetNames){const m=name.trim().toUpperCase().match(/^([A-Z]{3,9})\s*(20\d\d)$/);if(!m)continue;
+    const mi=MON3.indexOf(m[1].slice(0,3));if(mi>=0)out.push({name,y:Number(m[2]),m:mi+1});}
+  return out.sort((a,b)=>(b.y*12+b.m)-(a.y*12+a.m));
+}
+function findRegHeader(aoa){for(let i=0;i<Math.min(aoa.length,15);i++){const r=aoa[i]||[];if(txt(r[0]).toLowerCase()==='no'&&txt(r[1]).toLowerCase().includes('employee name'))return i;}return -1;}
+function isRegisterWorkbook(wb){const s=registerSheets(wb);return s.length>0&&findRegHeader(sheetAoa(wb,s[0].name))>=0;}
+function regColumns(hdr){
+  const h=hdr.map(v=>txt(v).toLowerCase());const f=(pred)=>h.findIndex(pred);
+  return{sal:f(x=>x.startsWith('remuneration')),ot:f(x=>x.includes('success fee')||x.includes('overtime')||x==='ot'),inc:f(x=>x.startsWith('incentive')||x.startsWith('bonus')),
+    oadd:f(x=>x.startsWith('other addition')),total:f(x=>x==='total'),wht:f(x=>x.startsWith('withholding')),sso:f(x=>x.startsWith('social security')),
+    pf:f(x=>x.startsWith('provid')),loan:f(x=>x.includes('student loan')),oded:f(x=>x==='other'),tded:f(x=>x.startsWith('total deduction')),net:f(x=>x.startsWith('net pay')),
+    prev:f(x=>x.startsWith('already paid')),acct:f(x=>x==='a/c'),pos:f(x=>x==='position'),dept:f(x=>x==='dept')};
+}
+function parseRegisterSheet(wb,sh){
+  const aoa=sheetAoa(wb,sh.name);const hi=findRegHeader(aoa);const c=regColumns(aoa[hi]);
+  const v=(r,k)=>c[k]>=0?num(r[c[k]]):0;const s=(r,k)=>c[k]>=0?txt(r[c[k]]):'';
+  let pfEr=null;
+  for(let i=0;i<hi;i++){const r=aoa[i]||[];r.forEach((x,ci)=>{if(/employer/i.test(txt(x))&&aoa[i+1]&&typeof aoa[i+1][ci]==='number')pfEr=aoa[i+1][ci];});}
+  const rows=[];let seen=false;
+  for(let i=hi+1;i<aoa.length;i++){
+    const r=aoa[i]||[];const a=txt(r[0]),name=txt(r[1]);
+    if(seen&&/constant energy|payroll report|^remark/i.test(a))break;
+    if(/^CE[A-Z]*\d+$/i.test(a)&&name){seen=true;
+      const email=r.find(x=>/@/.test(txt(x)))||'';
+      rows.push({code:a.toUpperCase(),name,sal:v(r,'sal'),ot:v(r,'ot'),inc:v(r,'inc'),oadd:v(r,'oadd'),wht:v(r,'wht'),sso:v(r,'sso'),pf:v(r,'pf'),
+        loan:v(r,'loan'),oded:v(r,'oded'),net:v(r,'net'),acct:s(r,'acct'),position:s(r,'pos'),dept:s(r,'dept'),email:txt(email)});}
+    else if(seen&&/^\d+$/.test(a)&&name&&!/total/i.test(name)&&v(r,'sal')>0){
+      const m=matchEmp('',name);
+      rows.push({code:m.code||'',director:true,name,sal:v(r,'sal'),ot:v(r,'ot'),inc:v(r,'inc'),oadd:v(r,'oadd'),wht:v(r,'wht'),sso:v(r,'sso'),pf:v(r,'pf'),
+        loan:v(r,'loan'),oded:v(r,'oded'),net:v(r,'net'),acct:txt(r[c.acct>=0?c.acct:18]),position:s(r,'pos'),dept:s(r,'dept')});}
+  }
+  return{sheet:sh.name,y:sh.y,m:sh.m,pfEr,rows};
+}
+/* "Tax calculationNN" sheet: one column per employee, monthly income / other income / allowances / SSF / PF / WHT blocks */
+function parseTaxCalc(wb,y){
+  const be=(y+543)%100;const name=wb.SheetNames.find(n=>new RegExp('^tax calculation\\s*'+be+'\\b','i').test(n.trim()));
+  if(!name)return null;
+  const aoa=sheetAoa(wb,name);
+  const lab=r=>txt((r||[]).slice(1,5).filter(x=>x!=null&&typeof x!=='number').join(' ')).toLowerCase();
+  const ci=aoa.findIndex(r=>(r||[]).slice(0,6).some(x=>txt(x)==='Company :'));if(ci<0)return null;
+  const codes=aoa[ci],names=aoa[ci+1]||[];const cols=[];const cc=codes.findIndex(x=>txt(x)==='Company :');
+  for(let c=cc+1;c<codes.length;c++){const code=txt(codes[c]),nm=txt(names[c]);if(/^CE/i.test(code))cols.push({c,code:code.toUpperCase(),name:nm});else if(nm&&!/^CE/i.test(code)&&c>6)cols.push({c,code:'',name:nm});}
+  const sec={inc:'monthly incomes',oth:'monthly other incomes',allow:'allowances',ssf:'monthly ssf',pf:'monthly provid',wht:'monthly withholding'};
+  const res={};for(const col of cols)res[col.code||('NAME:'+col.name)]={col:col.c,code:col.code,name:col.name,inc:{},oth:{},ssf:{},pf:{},wht:{},allow:{}};
+  let cur=null;
+  for(let i=ci+2;i<aoa.length;i++){
+    const l=lab(aoa[i]);if(!l)continue;
+    const k=Object.entries(sec).find(([,p])=>l.startsWith(p));if(k){cur=k[0];continue;}
+    if(!cur)continue;
+    if(/^total/.test(l)){cur=null;continue;}
+    if(cur==='allow'){
+      const key=/self/.test(l)?'self':/spouse/.test(l)?'spouse':/non-schooling/.test(l)?'childNS':/schooling/.test(l)?'childS':/parent/.test(l)?'parent':/life insurance/.test(l)?'lifeIns':
+        /provident|providend/.test(l)?'':/rmf|ltf/.test(l)?'rmfLtf':/ssf|esg/.test(l)?'ssfEsg':/special/.test(l)?'special':/housing/.test(l)?'housing':/social security/.test(l)?'':/donation/.test(l)?'donation':'';
+      if(key)for(const r of Object.values(res)){const x=aoa[i][r.col];if(typeof x==='number')r.allow[key]=(r.allow[key]||0)+x;}
+      continue;
+    }
+    const mi=MONTH_FULL.findIndex(mn=>l.includes(mn));if(mi<0)continue;
+    for(const r of Object.values(res)){const x=aoa[i][r.col];if(typeof x==='number'&&x)r[cur][mi+1]=r2((r[cur][mi+1]||0)+x);}
+  }
+  return{sheet:name,people:res};
+}
+function parseRegisterWorkbook(wb,fileName){
+  const sh=registerSheets(wb)[0];const reg=parseRegisterSheet(wb,sh);const tc=parseTaxCalc(wb,sh.y);
+  for(const r of reg.rows)if(!r.code){const t=tc&&Object.values(tc.people).find(p=>!p.code&&normName(p.name).split(' ')[0]===normName(r.name).split(' ')[0]);r.tcKey=t?'NAME:'+t.name:'';}
+  return{file:fileName,reg,tc};
+}
+function registerSummary(p){
+  const R=p.reg.rows;const sum=k=>r2(R.reduce((s,x)=>s+num(x[k]),0));
+  const known=new Set(S.employees.map(e=>e.code));
+  const fresh=R.filter(x=>!x.code||!known.has(x.code));
+  const inReg=new Set(R.map(x=>x.code));
+  const missing=S.employees.filter(e=>e.status!=='resigned'&&isEmployed(e,p.reg.y,p.reg.m)&&!inReg.has(e.code)&&e.bankTransfer!==false);
+  const gross=r2(R.reduce((s,x)=>s+x.sal+x.ot+x.inc+x.oadd,0));
+  const diffs=[];
+  for(const x of R){const e=S.employees.find(z=>z.code===x.code);if(!e)continue;const d=monthData(e,p.reg.y,p.reg.m);
+    if(d&&(Math.abs(d.wht-x.wht)>0.5||Math.abs(d.income+d.other-(x.sal+x.ot+x.inc+x.oadd))>0.5))diffs.push({code:x.code,name:x.name,app:r2(d.income+d.other),reg:r2(x.sal+x.ot+x.inc+x.oadd),appWht:d.wht,regWht:x.wht});}
+  return{count:R.length,gross,wht:sum('wht'),sso:sum('sso'),pf:sum('pf'),loan:sum('loan'),oded:sum('oded'),net:sum('net'),fresh,missing,diffs};
+}
+/* the register becomes that month's actuals: a locked run with the register's figures, plus history for the tax year */
+function applyRegister(p){
+  const {y,m,rows,pfEr}=p.reg;const key=ym(y,m);
+  if(S.historyYear!==y){for(const e of S.employees)delete e.history2026;S.historyYear=y;S.historyThroughMonth=0;}
+  const run={status:'locked',payDate:(S.runs[key]&&S.runs[key].payDate)||null,rows:{},source:p.file,mpa:S.runs[key]&&S.runs[key].mpa,docs:S.runs[key]&&S.runs[key].docs,pfErTotal:pfEr};
+  const touched=new Set(),left=[];let added=0;
+  for(const x of rows){
+    let code=x.code;
+    if(!code){if(x.director){let n=1;while(S.employees.some(z=>z.code==='CETD'+String(n).padStart(2,'0')))n++;code='CETD'+String(n).padStart(2,'0');}else code=nextCode([]);}
+    const isNew=!S.employees.some(z=>z.code===code);
+    let e=S.employees.find(z=>z.code===code);
+    const snap=r=>{for(const k of[0,1,2,3,4,5,6,7,7.5,8,9,10,11,12,13,14,15])if(Math.abs(r-k)<0.15)return k;return r2(r);};
+    if(!e){e={code,name:x.name,salary:x.sal,pfRate:x.sal&&x.pf?snap(x.pf/x.sal*100):0,bankAcct:fmtAcct(x.acct),taxId:'',position:x.position,dept:x.dept,email:x.email||'',status:'active',
+      startYM:key,allowances:{self:60000},ssoExempt:x.director&&!x.sso,bankTransfer:!x.director};S.employees.push(e);added++;}
+    if(x.acct&&digits(fmtAcct(x.acct)).length===10)e.bankAcct=fmtAcct(x.acct);
+    if(x.position)e.position=x.position;if(x.dept)e.dept=x.dept;if(x.email&&!e.email)e.email=x.email;
+    if(x.loan)e.loanMonthly=x.loan;else if(num(e.loanMonthly)&&!x.loan)e.loanMonthly=0;
+    const t=p.tc&&(p.tc.people[code]||p.tc.people[x.tcKey]);
+    const nextInc=t&&m<12?num(t.inc[m+1]):null;
+    if(nextInc>0)e.salary=nextInc;
+    else if(t&&m<12&&x.sal>0){e.status='resigned';e.resignYM=key;left.push(code);}
+    run.rows[code]={ot:x.ot,incentive:x.inc,otherAdd:x.oadd,studentLoan:x.loan,otherDed:x.oded,paidAdvance:0,whtOverride:x.wht,ssoOverride:x.sso,pfOverride:x.pf,
+      salaryOverride:Math.abs(x.sal-num(e.salary))>0.005?x.sal:null,exclude:false};
+    e.history2026=e.history2026||{};const H=e.history2026;for(const k of['income','other','wht','ssf','pf','loan','oded','net'])H[k]=H[k]||{};
+    if(t){for(let mm=1;mm<m;mm++){const g=(o)=>o[mm]||0;
+        if(g(t.inc)||g(t.oth)||g(t.wht)){H.income[mm]=g(t.inc);H.other[mm]=g(t.oth);H.wht[mm]=g(t.wht);H.ssf[mm]=g(t.ssf);H.pf[mm]=g(t.pf);}}
+      for(const[k,v]of Object.entries(t.allow))if(k)e.allowances[k]=v;
+      if(m<12&&t.wht[m+1]!=null&&nextInc>0)e.whtLevel={[y]:{amt:t.wht[m+1],base:nextInc}};}
+    else if(!(x.ot||x.inc||x.oadd))e.whtLevel={[y]:{amt:x.wht,base:x.sal}};
+    if(isNew){const first=[...Array(m).keys()].map(i=>i+1).find(mm=>num(H.income[mm])>0);if(first)e.startYM=ym(y,first);}
+    H.income[m]=x.sal;H.other[m]=r2(x.ot+x.inc+x.oadd);H.wht[m]=x.wht;H.ssf[m]=x.sso;H.pf[m]=x.pf;H.loan[m]=x.loan;H.oded[m]=x.oded;H.net[m]=x.net;
+    touched.add(code);
+  }
+  for(const e of S.employees)if(!touched.has(e.code)&&isEmployed(e,y,m))run.rows[e.code]=Object.assign(blankRow(),{exclude:true});
+  S.runs[key]=run;
+  if(m>S.historyThroughMonth)S.historyThroughMonth=m;
+  queueSave();
+  return{added,count:rows.length,left};
+}
+
+/* export in the CET register layout: monthly sheet (MMMYYYY) + Tax calculation sheet; every formula carries its computed value */
+const NUMFMT='#,##0.00;[Red]-#,##0.00;"-"';
+const sty={title:{font:{bold:true,sz:12}},bold:{font:{bold:true}},
+  head:{font:{bold:true},fill:{fgColor:{rgb:'E2EFDA'}},alignment:{wrapText:true,vertical:'center',horizontal:'center'},border:{top:{style:'thin'},bottom:{style:'thin'}}},
+  total:{font:{bold:true},border:{top:{style:'thin'},bottom:{style:'double'}}}};
+function cellsFrom(aoa){const ws=XLSX.utils.aoa_to_sheet(aoa.map(r=>r.map(c=>c&&typeof c==='object'?null:c)));
+  aoa.forEach((r,ri)=>r.forEach((c,ci)=>{if(c&&typeof c==='object'){ws[XLSX.utils.encode_cell({r:ri,c:ci})]=Object.assign({t:'n'},c);}}));
+  const rng=XLSX.utils.decode_range(ws['!ref']||'A1');aoa.forEach((r,ri)=>{rng.e.r=Math.max(rng.e.r,ri);rng.e.c=Math.max(rng.e.c,r.length-1);});ws['!ref']=XLSX.utils.encode_range(rng);
+  return ws;}
+const F=(f,v,s)=>({t:'n',f,v:r2(num(v)),z:NUMFMT,s});
+const N=(v,s)=>({t:'n',v:r2(num(v)),z:NUMFMT,s});
+const Sx=(v,s)=>({t:'s',v:String(v),s});
+const COLS12=['C','D','E','F','G','H','I','J','K','L','M','N'];
+function regVals(x){const c=x.c,rw=x.r||{};return[c.sal,num(rw.ot),c.inc,num(rw.otherAdd),c.total,c.wht,c.sso,c.pf,c.loan,c.oded,c.ded,c.net];}
+function registerAoa(){
+  const t=runTotals();const per=MON3[P.m-1]+P.y;
+  const main=t.rows.filter(x=>x.e.bankTransfer!==false),dir=t.rows.filter(x=>x.e.bankTransfer===false);
+  const H=['No','Employee name','Remuneration ','Success fee/  Overtime','Incentive','Other addition','Total','Withholding Tax','Social Security Fund*','Providend fund','other (student loan)','Other','Total deduction','Net Pay','','Already paid','Net','','A/C','POSITION','DEPT','Note'];
+  const first=7,last=first+main.length-1,tot=last+1;
+  const sumOf=(rows)=>COLS12.map((_,i)=>r2(rows.reduce((s,x)=>s+regVals(x)[i],0)));
+  const mt=sumOf(main),dtot=sumOf(dir);
+  const prev=main.map(x=>prevMonthNet(x.e,P.y,P.m));
+  const pTot=r2(prev.reduce((s,v)=>s+(v||0),0)),qTot=r2(main.reduce((s,x,i)=>s+(prev[i]==null?0:x.c.net-prev[i]),0));
+  const ssoX2=r2(mt[6]*2),remit=r2(ssoX2+mt[8]);
+  const serial=(Date.UTC(P.y,P.m-1,1)-Date.UTC(1899,11,30))/86400000;
+  const aoa=[];
+  aoa.push([Sx(S.company.nameEN,sty.title)]);
+  aoa.push([Sx('Payroll report',sty.bold),null,null,null,null,null,null,null,null,null,null,F(`J4+J${tot}`,t.pfEr+mt[7])]);
+  aoa.push(['Period',{t:'n',v:serial,z:'mmm-yy'},null,null,null,null,null,null,F(`I${tot}*2`,ssoX2),Sx('Employer\nContribution',sty.bold)]);
+  aoa.push([null,null,null,null,null,null,null,null,null,N(t.pfEr,sty.bold),null,F(`I${tot}*2+K${tot}`,remit),null,F(`N${tot}+L4`,mt[11]+remit)]);
+  aoa.push(H.map(h=>h?Sx(h,sty.head):null));
+  aoa.push([]);
+  main.forEach((x,i)=>{const r=first+i,v=regVals(x),pv=prev[i];
+    aoa.push([x.e.code,x.e.name,N(v[0]),N(v[1]),N(v[2]),N(v[3]),F(`SUM(C${r}:F${r})`,v[4]),N(v[5]),N(v[6]),N(v[7]),N(v[8]),N(v[9]),F(`SUM(H${r}:L${r})`,v[10]),F(`G${r}-M${r}`,v[11]),null,
+      pv==null?null:N(pv),pv==null?null:F(`N${r}-P${r}`,v[11]-pv),x.e.email||null,x.e.bankAcct||null,x.e.position||null,x.e.dept||null,x.e.startNote||null]);});
+  aoa.push([null,Sx('Total',sty.total),...COLS12.map((col,i)=>F(`SUM(${col}${first}:${col}${last})`,mt[i],sty.total)),null,F(`SUM(P${first}:P${last})`,pTot,sty.total),F(`SUM(Q${first}:Q${last})`,qTot,sty.total)]);
+  if(dir.length){
+    aoa.push([]);const d0=aoa.length+1;
+    dir.forEach((x,i)=>{const r=d0+i,v=regVals(x);aoa.push([i+1,x.e.name,N(v[0]),N(v[1]),N(v[2]),N(v[3]),F(`SUM(C${r}:F${r})`,v[4]),N(v[5]),N(v[6]),N(v[7]),N(v[8]),N(v[9]),F(`SUM(H${r}:L${r})`,v[10]),F(`G${r}-M${r}`,v[11]),null,null,null,x.e.position||null,x.e.bankAcct||null,null,x.e.dept||null]);});
+    const d1=aoa.length;aoa.push([]);const dt=aoa.length+1;
+    aoa.push([null,null,...COLS12.map((col,i)=>F(`SUM(${col}${d0}:${col}${d1})`,dtot[i],sty.total))]);
+    aoa.push([]);
+    aoa.push([null,Sx('Total paid',sty.total),...COLS12.map((col,i)=>F(`${col}${tot}+${col}${dt}`,mt[i]+dtot[i],sty.total))]);
+  }
+  return{aoa,name:per,widths:[9,30,13,13,11,11,13,12,11,11,10,9,12,13,2,13,12,30,16,26,22,24]};
+}
+function taxCalcAoa(){
+  const t=runTotals();const people=t.rows.map(x=>{const c=calcRow(x.e,x.r||{},P.y,P.m,true);return{e:x.e,c,d:c.detail};});
+  const nP=people.length,col=i=>XLSX.utils.encode_col(i+2);
+  const aoa=[[Sx('INCOME TAX CALCULATION '+(P.y+543),sty.title)],[],['','Company :',...people.map(p=>Sx(p.e.code,sty.head))],['','Name :',...people.map(p=>Sx(p.e.name,sty.bold))],['','Month :',P.m,'Year :',P.y],[]];
+  const monthVal=(p,mm,k)=>{const d=p.d;if(!d)return 0;const mo=d.months[mm-1];
+    if(k==='inc')return mo.inc;if(k==='oth')return mo.oth;
+    if(k==='wht'){if(mm<P.m)return mo.wht;if(mm===P.m)return p.c.wht;const last=lastEmployedMonth(p.e,P.y);const lvl=d.level!=null?d.level:p.c.wht;
+      if(mm<last)return isEmployed(p.e,P.y,mm)?lvl:0;
+      if(mm===last)return r2(Math.max(0,d.taxAll-(d.whtYTD+p.c.wht+lvl*Math.max(0,mm-P.m-1))));return 0;}
+    const md=mm<P.m?monthData(p.e,P.y,mm):null;
+    if(k==='ssf')return md?md.sso:(mm===P.m?p.c.sso:(isEmployed(p.e,P.y,mm)?ssoOf(p.e,p.e.salary):0));
+    if(k==='pf')return md?md.pf:(mm===P.m?p.c.pf:(isEmployed(p.e,P.y,mm)?pfOf(p.e,p.e.salary):0));return 0;};
+  const totals={};
+  const block=(title,k)=>{const r0=aoa.length+2;aoa.push(['',Sx(title,sty.bold)]);const sums=people.map(()=>0);
+    for(let mm=1;mm<=12;mm++)aoa.push(['',THMONTH[mm-1]+' / '+MONTH_FULL[mm-1].replace(/^./,c=>c.toUpperCase()),...people.map((p,i)=>{const v=r2(monthVal(p,mm,k));sums[i]+=v;return N(v);})]);
+    const r1=aoa.length;aoa.push(['',Sx('Total',sty.total),...people.map((p,i)=>F(`SUM(${col(i)}${r0}:${col(i)}${r1})`,sums[i],sty.total))]);totals[k]={row:aoa.length,v:sums};};
+  block('Monthly Incomes :','inc');block('Monthly Other Incomes :','oth');
+  const A0=aoa.length+2;aoa.push(['',Sx('Allowances :',sty.bold)]);const asum=people.map(()=>0);
+  const AL=[['Self','self'],['Spouse','spouse'],['Non-schooling children','childNS'],['Schooling children','childS'],['Parent','parent'],['Life insurance premium','lifeIns'],['Provident fund','_pf'],['RMF / LTF','rmfLtf'],['SSF / ThaiESG','ssfEsg'],['Special','special'],['Interest on housing loans','housing'],['Social security','_sso'],['Donation','donation']];
+  for(const[l,k]of AL)aoa.push(['',l,...people.map((p,i)=>{const A=p.e.allowances||{};const d=p.d||{};
+    const v=r2(k==='_pf'?num(d.annPF):k==='_sso'?Math.min(num(d.annSSO),S.settings.ssoCeil*12*S.settings.ssoRate/100):k==='lifeIns'||k==='housing'?Math.min(num(A[k]),100000):k==='self'?(num(A.self)||60000):num(A[k]));
+    if(k!=='donation')asum[i]+=v;return N(v);})]);
+  const A1=aoa.length-1;aoa.push(['',Sx('Total allowances (before donation)',sty.total),...people.map((p,i)=>F(`SUM(${col(i)}${A0}:${col(i)}${A1})`,asum[i],sty.total))]);const rAl=aoa.length;
+  block('Monthly SSF :','ssf');block('Monthly provident fund :','pf');block('Monthly Withholding Tax :','wht');
+  aoa.push([]);
+  const line=(lbl,fn,vals,s)=>{aoa.push(['',Sx(lbl,s||sty.bold),...people.map((p,i)=>fn?F(fn(col(i)),vals[i]):N(vals[i]))]);return aoa.length;};
+  const inc=totals.inc.v,oth=totals.oth.v,gross=people.map((p,i)=>r2(inc[i]+oth[i])),exp=gross.map(g=>-Math.min(g*0.5,100000));
+  const rS=line('Salary',c=>`${c}${totals.inc.row}`,inc);const rO=line('Other income',c=>`${c}${totals.oth.row}`,oth);
+  const rT=line('Total income',c=>`${c}${rS}+${c}${rO}`,gross);
+  const rE=line('Personal expenses',c=>`-MIN(${c}${rT}*50%,100000)`,exp);
+  const rA=line('Total allowance',c=>`-${c}${rAl}`,asum.map(v=>-v));
+  line('Net income before donation',c=>`MAX(0,${c}${rT}+${c}${rE}+${c}${rA})`,gross.map((g,i)=>Math.max(0,g+exp[i]-asum[i])));
+  line('Net taxable income (after donation)',null,people.map(p=>p.d?p.d.taxableAll:0));
+  const rX=line('Tax for the year',null,people.map(p=>p.d?p.d.taxAll:0));
+  line('Remain (tax − withheld)',c=>`${c}${rX}-${c}${totals.wht.row}`,people.map((p,i)=>r2((p.d?p.d.taxAll:0)-totals.wht.v[i])),sty.total);
+  return{aoa,name:'Tax calculation'+((P.y+543)%100),widths:[2,34,...people.map(()=>14)]};
+}
+function exportRegisterXlsx(){
+  const reg=registerAoa(),tc=taxCalcAoa();
+  const wb=XLSX.utils.book_new();
+  for(const s of[reg,tc]){const ws=cellsFrom(s.aoa);ws['!cols']=s.widths.map(w=>({wch:w}));XLSX.utils.book_append_sheet(wb,ws,s.name);}
+  const mm=String(P.m).padStart(2,'0'),mon=MON3[P.m-1].charAt(0)+MON3[P.m-1].slice(1).toLowerCase();
+  saveFile(`${mm}. Payroll_${mon}${P.y}_CET (app).xlsx`,XLSX.write(wb,{type:'array',bookType:'xlsx'}));
+}
+/* ---------- one import page: drop any file, the app works out what it is ---------- */
+const IMP={files:[],register:null};
+const KIND_LBL={mpa:'MPA',register:'ทะเบียนเงินเดือน',data:'ข้อมูลพนักงาน/ยอดสะสม',doc:'เอกสารประกอบ',bbl:'ไฟล์โอน BBL',legacy:'ทะเบียน (แบบย่อ)','?':'กำลังอ่าน'};
+async function handleFiles(list){
+  const files=[...list];if(!files.length)return;
+  for(const f of files.filter(f=>/\.json$/i.test(f.name))){try{const o=JSON.parse(await f.text());
+    if(o.employees&&o.settings){S=Object.assign(defaultState(),o);S.settings=Object.assign(defaultState().settings,o.settings||{});S.company=Object.assign(defaultState().company,o.company||{});migrate();queueSave();toast('กู้คืนข้อมูลสำรองแล้ว');}
+    else handleSeed(o);}catch(e){toast('อ่านไฟล์ JSON ไม่สำเร็จ');}}
+  files.splice(0,files.length,...files.filter(f=>!/\.json$/i.test(f.name)));if(!files.length){render();return;}
+  if(VIEW!=='mpa')go('mpa');
+  for(const f of files){
+    const it={id:Math.random().toString(36).slice(2),name:f.name,size:f.size,kind:'?',status:'reading',msg:'กำลังอ่านไฟล์…'};
+    IMP.files.unshift(it);renderImportCards();
+    if(/\.(xlsx|xlsm|xls)$/i.test(f.name)){it.bytes=new Uint8Array(await f.arrayBuffer());await openWorkbookItem(it,null);}
+    else{addDocs([f],true);it.kind=/^CET \d{6}\.txt$/i.test(f.name)?'bbl':'doc';it.status='done';
+      const d=(getRun(false)||{}).docs||[];const doc=d.find(x=>x.name===f.name);
+      it.msg=`${DOC_TYPES[doc?doc.type:'other']}${doc&&doc.code?' · '+doc.code:''} · บันทึกชื่อไฟล์ไว้ในงวด ${pkey()}`;}
+  }
+  render();
+}
+async function openWorkbookItem(it,pw){
+  try{
+    let bytes=it.bytes;
+    if(isEncryptedXlsx(bytes)){
+      if(!pw){it.status='password';it.msg='ไฟล์นี้ตั้งรหัสผ่านไว้ — ใส่รหัสเพื่อเปิดในเบราว์เซอร์เครื่องนี้ (รหัสไม่ถูกส่งออกไปไหน)';renderImportCards();return;}
+      it.status='decrypting';it.msg='กำลังถอดรหัส…';renderImportCards();
+      bytes=await decryptAgile(bytes,pw,f=>{it.msg=`กำลังถอดรหัส… ${Math.round(f*100)}%`;renderImportCards();});
+    }
+    it.msg='กำลังอ่านข้อมูล…';renderImportCards();
+    const wb=XLSX.read(bytes,{type:'array'});
+    if(isMpaWorkbook(wb)){
+      const parsed=parseMpa(wb,it.name);
+      if(parsed.period&&parsed.period!==pkey()){const[y,m]=parsed.period.split('-').map(Number);P={y,m};try{sessionStorage.setItem('cet.period',y+'-'+m);}catch(e){}}
+      const run=getRun(true);
+      if(run.status==='locked'){it.kind='mpa';it.status='error';it.msg=`งวด ${pkey()} ปิดแล้ว — เปิดงวดก่อนจึงจะนำ MPA เข้าได้`;}
+      else{run.mpa=Object.assign(parsed,{});it.kind='mpa';it.status='review';
+        it.msg=`งวด ${parsed.period} · ${parsed.lines.length} รายการ · ตรวจในขั้นที่ 2 แล้วกด "สร้างงวด"`;queueSave();}
+    }else if(isRegisterWorkbook(wb)){
+      const p=parseRegisterWorkbook(wb,it.name);IMP.register=p;it.kind='register';it.status='review';
+      it.msg=`ชีต ${p.reg.sheet} · ${p.reg.rows.length} คน${p.tc?' · '+p.tc.sheet:''} · ตรวจยอดด้านล่างแล้วกด "บันทึกเป็นยอดจริง"`;
+    }else{
+      const r=importDataWorkbook(wb);
+      if(r.empN||r.runN||r.histN){it.kind='data';it.status='done';it.msg=`พนักงาน ${r.empN} · ยอดงวด ${r.runN} · ยอดจริง ${r.histN} รายการ (ถึงเดือน ${S.historyThroughMonth})`;queueSave();}
+      else if(r.legacy){importLegacyRegister(r.legacy);it.kind='legacy';it.status='done';it.msg='นำยอดจากชีต '+r.legacy.name+' เข้าทะเบียนจ่ายงวดนี้';}
+      else if(wb.SheetNames.includes('Payroll')&&wb.SheetNames.some(n=>/^sheet\d/i.test(n))){addDocs([{name:it.name,size:it.size}],true);it.kind='bbl';it.status='done';it.msg='บันทึกเป็นเอกสารประกอบ (ไฟล์โอน BBL)';}
+      else{it.kind='doc';it.status='error';it.msg='ไม่รู้จักรูปแบบไฟล์ Excel นี้';}
+    }
+    it.bytes=null;
+  }catch(e){it.status=/รหัสผ่าน/.test(e.message)?'password':'error';it.msg=e.message||String(e);}
+  render();
+}
+function importDataWorkbook(wb){
+  let empN=0,runN=0,histN=0,legacy=null;
+  const sheets=wb.SheetNames.map(name=>{const aoa=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1});
+    return{name,aoa,hdr:(aoa[0]||[]).map(v=>String(v==null?'':v).trim().toLowerCase())};});
+  const isEmp=s=>/^employees$/i.test(s.name.trim())||(s.hdr[0]==='code'&&s.hdr.includes('name')&&s.hdr.includes('salary'));
+  for(const s of sheets.filter(isEmp))empN+=importEmpSheet(s.aoa,s.hdr);
+  for(const s of sheets){
+    if(!s.aoa.length||isEmp(s))continue;
+    const mRun=s.name.trim().match(/^run[-_ ](\d{4})-(\d{1,2})$/i),mHist=s.name.trim().match(/^history[-_ ](\d{4})$/i);
+    if(mRun&&s.hdr.includes('code')){runN+=importRunSheet(s.aoa,s.hdr,ym(Number(mRun[1]),Number(mRun[2])));continue;}
+    if(mHist&&s.hdr.includes('code')&&s.hdr.includes('month')){histN+=importHistSheet(s.aoa,s.hdr,Number(mHist[1]));continue;}
+    if(!legacy)for(let i=0;i<Math.min(s.aoa.length,12);i++){const row=(s.aoa[i]||[]).map(v=>String(v||'').toLowerCase());
+      if(row[0]==='no'&&row.some(v=>v&&v.includes('employee'))){legacy={name:s.name,aoa:s.aoa,hdr:i};break;}}
+  }
+  return{empN,runN,histN,legacy};
+}
+window.submitPw=function(id){const it=IMP.files.find(x=>x.id===id);const inp=document.getElementById('pw_'+id);if(!it||!inp||!inp.value)return;
+  const pw=inp.value;inp.value='';openWorkbookItem(it,pw);};
+window.dropFileCard=function(id){IMP.files=IMP.files.filter(x=>x.id!==id);render();};
+function fileCard(it){
+  const chip={done:'g',review:'b',password:'a',decrypting:'a',reading:'a',error:'r'}[it.status]||'b';
+  const st={done:'นำเข้าแล้ว',review:'รอตรวจ',password:'ต้องใช้รหัสผ่าน',decrypting:'กำลังถอดรหัส',reading:'กำลังอ่าน',error:'ไม่สำเร็จ'}[it.status];
+  return `<div class="fcard"><div class="fname" title="${esc(it.name)}">${esc(it.name)}</div>
+    <div class="fmeta"><span class="chip ${chip}">${st}</span> <span class="chip b">${KIND_LBL[it.kind]||it.kind}</span> <span>${esc(it.msg||'')}</span></div>
+    ${it.status==='password'?`<form class="pwrow" onsubmit="event.preventDefault();submitPw('${it.id}')"><input type="password" id="pw_${it.id}" autocomplete="off" placeholder="รหัสผ่านไฟล์"><button class="btn pri sm" type="submit">เปิดไฟล์</button></form>`:''}
+    ${it.status!=='decrypting'&&it.status!=='reading'?`<button class="btn sm fx" onclick="dropFileCard('${it.id}')" title="ซ่อนการ์ดนี้">✕</button>`:''}</div>`;
+}
+function renderImportCards(){const box=document.getElementById('fileCards');if(box)box.innerHTML=IMP.files.map(fileCard).join('');else if(VIEW==='mpa')render();}
+function stepState(){
+  const run=getRun(false)||{};const locked=run.status==='locked';
+  const hasInput=!!(run.mpa||run.source||(run.docs||[]).length);
+  const reviewed=!!(run.mpa&&run.mpa.lines.every(L=>!L.include||L.code||(L.kind==='emp'&&L.action!=='C')));
+  const generated=locked||!!(run.mpaApplied&&run.mpaApplied.length)||!!run.source;
+  return[{n:1,t:'นำเข้าไฟล์',s:'MPA · เอกสาร · ทะเบียน',done:hasInput,v:'mpa'},{n:2,t:'ตรวจรายการ',s:'จับคู่พนักงาน/เอกสาร',done:reviewed,v:'mpa'},
+    {n:3,t:'สร้างงวด',s:'งวดก่อน + MPA',done:generated,v:'mpa'},{n:4,t:'ตรวจ & ปิดงวด',s:'ผลต่างกับเดือนก่อน',done:locked,v:'run'},{n:5,t:'ส่งออกไฟล์',s:'ทะเบียน · ภ.ง.ด.1 · สปส. · BBL · PEAK',done:false,v:'run'}];
+}
+function stepperHtml(){const st=stepState();const cur=st.findIndex(s=>!s.done);
+  return `<div class="stepper">${st.map((s,i)=>`<button class="stp ${s.done?'done':''} ${i===cur?'cur':''}" onclick="go('${s.v}')"><span class="n">${s.done?'✓':s.n}</span><span><b>${s.t}</b><small>${s.s}</small></span></button>`).join('')}</div>`;}
+function registerPanel(){
+  const p=IMP.register;if(!p)return '';const s=registerSummary(p);const k=ym(p.reg.y,p.reg.m);
+  return `<div class="panel"><div class="hd"><h3>ทะเบียนเงินเดือน ${THMONTH[p.reg.m-1]} ${p.reg.y} · ${esc(p.file)}</h3>
+    <button class="btn" onclick="IMP.register=null;render()">ยกเลิก</button>
+    <button class="btn pri" onclick="confirmRegister()">บันทึกเป็นยอดจริงเดือน ${THMONTH[p.reg.m-1]}</button></div>
+  <div class="bd"><div class="cards">
+    <div class="card"><div class="k">พนักงาน</div><div class="v num">${s.count}</div></div>
+    <div class="card"><div class="k">เงินได้รวม</div><div class="v num">${fmt(s.gross)}</div></div>
+    <div class="card"><div class="k">ภาษีหัก ณ ที่จ่าย</div><div class="v num">${fmt(s.wht)}</div></div>
+    <div class="card"><div class="k">ปกส. ลูกจ้าง / PF ลูกจ้าง</div><div class="v num">${fmt(s.sso)} / ${fmt(s.pf)}</div></div>
+    <div class="card"><div class="k">PF นายจ้าง</div><div class="v num">${p.reg.pfEr!=null?fmt(p.reg.pfEr):'–'}</div></div>
+    <div class="card acc"><div class="k">เงินสุทธิ</div><div class="v num">${fmt(s.net)}</div></div></div>
+    <p class="sub">${p.tc?`มีชีต ${esc(p.tc.sheet)} — จะนำยอดสะสม ม.ค.–${THMONTH[p.reg.m-2]||''} ค่าลดหย่อน และภาษีระดับปกติของเดือนถัดไปเข้ามาด้วย`:'ไม่พบชีต Tax calculation — นำเข้าเฉพาะยอดเดือนนี้'} · งวด ${k} จะถูกปิดด้วยยอดจากทะเบียนนี้</p>
+    ${s.fresh.length?`<div class="note">พนักงานที่ยังไม่มีในแอป ${s.fresh.length} คน จะเพิ่มให้: ${s.fresh.slice(0,8).map(x=>esc(x.code||x.name)).join(', ')}${s.fresh.length>8?' …':''}</div>`:''}
+    ${s.missing.length?`<div class="note warn">มีในแอปแต่ไม่อยู่ในทะเบียนเดือนนี้ ${s.missing.length} คน: ${s.missing.slice(0,8).map(e=>esc(e.code)).join(', ')} — ถ้าลาออกแล้ว ให้ตั้งสถานะในหน้าพนักงาน</div>`:''}
+    ${s.diffs.length?`<p><b>ต่างจากยอดในแอปตอนนี้ ${s.diffs.length} คน</b> (ยอดในทะเบียนจะใช้แทน)</p><div class="tblwrap"><table><thead><tr><th>รหัส</th><th>ชื่อ</th><th class="r">เงินได้ (แอป)</th><th class="r">เงินได้ (ทะเบียน)</th><th class="r">ภาษี (แอป)</th><th class="r">ภาษี (ทะเบียน)</th></tr></thead><tbody>
+      ${s.diffs.slice(0,40).map(d=>`<tr><td class="num">${esc(d.code)}</td><td class="name-cell">${esc(d.name)}</td><td class="r num">${fmt(d.app)}</td><td class="r num">${fmt(d.reg)}</td><td class="r num">${fmt(d.appWht)}</td><td class="r num">${fmt(d.regWht)}</td></tr>`).join('')}</tbody></table></div>`:'<p><span class="chip g">✓</span> ยอดตรงกับข้อมูลในแอปทุกคน</p>'}
+  </div></div>`;
+}
+window.confirmRegister=function(){const p=IMP.register;if(!p)return;const r=applyRegister(p);
+  const it=IMP.files.find(x=>x.kind==='register'&&x.status==='review');if(it){it.status='done';it.msg=`บันทึกเป็นยอดจริงงวด ${ym(p.reg.y,p.reg.m)} แล้ว · ${r.count} คน${r.added?' · เพิ่มพนักงานใหม่ '+r.added+' คน':''}${r.left.length?' · ไม่มีเงินเดือนเดือนถัดไปในแผนภาษี จึงตั้งเป็นลาออก: '+r.left.join(', '):''}`;}
+  IMP.register=null;const[y,m]=[p.reg.y,p.reg.m];P={y,m};render();toast(`บันทึกทะเบียน ${THMONTH[m-1]} ${y} เป็นยอดจริงแล้ว — ไปเดือนถัดไปเพื่อเริ่มงวดใหม่`);};
+
+function vMpa(el){
+  const run=getRun(true);const locked=run.status==='locked';const mp=run.mpa;
+  const per=pkey();const chk=docCheck(run);
+  const empOpts=sel=>'<option value="">— เลือกพนักงาน —</option>'+[...S.employees].sort((a,b)=>a.code.localeCompare(b.code)).map(e=>`<option value="${esc(e.code)}" ${e.code===sel?'selected':''}>${esc(e.code)} ${esc(e.name)}</option>`).join('');
+  const kindLbl=L=>L.kind==='emp'?(L.action==='C'?'แก้ไขพนักงาน':'พนักงานใหม่'):L.kind==='res'?'ลาออก':({1:'เงินเดือน',2:'ประจำ',3:'ครั้งคราว'}[L.type]||'Pay-Ded');
+  const rows=mp?mp.lines.map((L,i)=>{const o=opsFor(L,per);const isNew=L.kind==='emp'&&L.action!=='C'&&!L.code;
+    return `<tr${L.include?'':' style="opacity:.55"'}>
+      <td><input type="checkbox" data-inc="${i}" ${L.include?'checked':''} ${locked?'disabled':''}></td>
+      <td>${kindLbl(L)}<br><small style="color:var(--muted)">${esc(L.sheet)} แถว ${L.row}</small></td>
+      <td class="name-cell" title="${esc(L.name)}">${esc(L.name)}${L.item?'<br><small style="color:var(--muted)">'+esc(L.item)+'</small>':''}</td>
+      <td>${isNew?`<input data-newcode="${i}" value="${esc(L.newCode||'')}" style="width:84px" ${locked?'disabled':''}>`:
+        `<select data-emp="${i}" style="max-width:220px" ${locked?'disabled':''}>${empOpts(L.code)}</select>${L.conf==='weak'?' <span class="chip a">ตรวจชื่อ</span>':''}`}</td>
+      <td class="r num">${L.kind==='pd'?fmt(L.amount):L.kind==='emp'&&L.salary?fmt(L.salary):''}</td>
+      <td style="white-space:normal;min-width:260px">${esc(o.desc)}${o.warn?`<br><span class="chip a">${esc(o.warn)}</span>`:''}${L.remark?`<br><small style="color:var(--muted)">${esc(L.remark)}</small>`:''}</td></tr>`;}).join(''):'';
+  const docs=run.docs||[];
+  const prevKey=(()=>{let y=P.y,m=P.m-1;if(m<1){m=12;y--;}return ym(y,m);})();
+  const prevOk=(S.runs[prevKey]&&S.runs[prevKey].status==='locked')||(Number(prevKey.slice(0,4))===S.historyYear&&Number(prevKey.slice(5))<=S.historyThroughMonth);
+  el.innerHTML=`
+  <h2>นำเข้าข้อมูล · ${THMONTH[P.m-1]} ${P.y}</h2>
+  <p class="sub">งวดนี้ = เงินเดือนงวดก่อน (เงินเดือน เงินเพิ่มประจำ กยศ. ระดับภาษี) + รายการใน MPA เดือนนี้ · ${prevOk?`<span class="chip g">✓ มียอดงวดก่อน (${prevKey})</span>`:`<span class="chip a">ยังไม่มียอดงวด ${prevKey} — ปิดงวดหรือนำเข้าทะเบียนเดือนนั้นก่อน</span>`}</p>
+  ${stepperHtml()}
+  <div class="drop" id="dropAll" onclick="document.getElementById('fileAny').click()" role="button" tabindex="0">
+    <b>ลากไฟล์มาวางที่นี่ หรือคลิกเพื่อเลือก</b>
+    <span>MPA · ทะเบียนเงินเดือน (มีรหัสผ่านได้) · ไฟล์ข้อมูลพนักงาน · เอกสารประกอบ (PDF, รูป, อีเมล) — ใส่หลายไฟล์พร้อมกันได้ ระบบแยกประเภทให้เอง</span>
+  </div>
+  <div id="fileCards" class="fcards">${IMP.files.map(fileCard).join('')}</div>
+  ${registerPanel()}
+  ${mp&&mp.period&&mp.period!==per?`<div class="note warn">⚠ MPA นี้เป็นของงวด ${esc(mp.period)} แต่กำลังดูงวด ${per} — <a href="#" onclick="gotoPeriod('${esc(mp.period)}');return false">ไปที่งวด ${esc(mp.period)}</a></div>`:''}
+  <div class="panel"><div class="hd"><h3><span class="sn">2</span> ตรวจรายการ MPA ${mp?'· '+esc(mp.file)+' · '+mp.lines.length+' รายการ':''}</h3></div>
+  ${mp?`<div class="tblwrap" style="max-height:52vh;overflow-y:auto"><table><thead><tr><th>ใช้</th><th>ประเภท</th><th>ชื่อใน MPA / รายการ</th><th>พนักงานในระบบ</th><th class="r">จำนวน</th><th>สิ่งที่จะทำ</th></tr></thead><tbody>${rows}</tbody></table></div>`
+  :`<div class="bd"><div class="empty"><b>ยังไม่มี MPA ของงวดนี้</b>ลากไฟล์ MPA-${String(P.m).padStart(2,'0')}${P.y}.xlsx มาวางด้านบน</div></div>`}
+  </div>
+  <div class="panel"><div class="hd"><h3>เอกสารประกอบ · ${docs.length} ไฟล์</h3></div>
+  ${docs.length?`<div class="tblwrap"><table><thead><tr><th>ไฟล์</th><th>ประเภท</th><th>พนักงาน</th><th>ตรวจแล้ว</th><th></th></tr></thead><tbody>
+    ${docs.map((d,i)=>`<tr><td class="name-cell" style="max-width:320px" title="${esc(d.name)}">${esc(d.name)}</td>
+      <td><select data-dtype="${i}" ${locked?'disabled':''}>${Object.entries(DOC_TYPES).map(([k,v])=>`<option value="${k}" ${k===d.type?'selected':''}>${v}</option>`).join('')}</select></td>
+      <td><select data-demp="${i}" style="max-width:220px" ${locked?'disabled':''}>${empOpts(d.code)}</select></td>
+      <td><input type="checkbox" data-dok="${i}" ${d.checked?'checked':''} ${locked?'disabled':''}></td>
+      <td><button class="btn sm" data-ddel="${i}" ${locked?'disabled':''}>ลบ</button></td></tr>`).join('')}
+  </tbody></table></div>`:'<div class="bd" style="color:var(--muted);font-size:12.5px">ยังไม่มีเอกสาร — ลากไฟล์มาวางพร้อม MPA ได้เลย (เก็บเฉพาะชื่อไฟล์)</div>'}
+  </div>
+  ${mp||docs.length?`<div class="panel"><div class="hd"><h3>ตรวจความครบถ้วน</h3></div><div class="bd" style="font-size:12.5px">
+    ${chk.noDoc.length?`<p><b>รายการ MPA ที่ยังไม่มีเอกสารประกอบ (${chk.noDoc.length})</b></p><ul>${chk.noDoc.map(L=>`<li>${esc(L.code||L.newCode)} ${esc(L.name)} — ${esc(L.item||(L.kind==='res'?'ลาออก':'ข้อมูลพนักงาน'))}</li>`).join('')}</ul>`:'<p><span class="chip g">✓</span> ทุกรายการใน MPA มีเอกสารประกอบ</p>'}
+    ${chk.hints.length?`<p><b>สิ่งที่ต้องทำตามเอกสาร (${chk.hints.length})</b></p><ul>${chk.hints.map(h=>`<li>${esc(h.txt)} <a href="#" onclick="editEmp('${esc(h.d.code)}');return false">เปิดข้อมูลพนักงาน</a></li>`).join('')}</ul>`:''}
+  </div></div>`:''}
+  <div class="actionbar">
+    <div><b><span class="sn">3</span> สร้างงวด ${THMONTH[P.m-1]} ${P.y}</b><br><small>${run.source?'งวดนี้ใช้ยอดจากทะเบียน '+esc(run.source):locked?'งวดนี้ปิดแล้ว':run.mpaApplied&&run.mpaApplied.length?'สร้างแล้ว — กดอีกครั้งเพื่อสร้างใหม่หลังแก้รายการ':'ใช้ข้อมูลงวดก่อน + รายการ MPA ที่เลือกไว้'}</small></div>
+    <button class="btn pri" onclick="applyMpaNow(true)" ${locked||!mp?'disabled':''}>สร้างงวดใหม่: งวดก่อน + MPA</button>
+    <button class="btn" onclick="go('run')">ไปตรวจทะเบียนจ่าย →</button>
+  </div>`;
+  el.querySelectorAll('[data-inc]').forEach(x=>x.addEventListener('change',()=>{mp.lines[x.dataset.inc].include=x.checked;queueSave();vMpa(el);}));
+  el.querySelectorAll('[data-emp]').forEach(x=>x.addEventListener('change',()=>{const L=mp.lines[x.dataset.emp];L.code=x.value;L.conf=x.value?'user':'none';L.include=!!x.value;queueSave();vMpa(el);}));
+  el.querySelectorAll('[data-newcode]').forEach(x=>x.addEventListener('change',()=>{mp.lines[x.dataset.newcode].newCode=x.value.trim();queueSave();vMpa(el);}));
+  el.querySelectorAll('[data-dtype]').forEach(x=>x.addEventListener('change',()=>{run.docs[x.dataset.dtype].type=x.value;queueSave();vMpa(el);}));
+  el.querySelectorAll('[data-demp]').forEach(x=>x.addEventListener('change',()=>{run.docs[x.dataset.demp].code=x.value;queueSave();vMpa(el);}));
+  el.querySelectorAll('[data-dok]').forEach(x=>x.addEventListener('change',()=>{run.docs[x.dataset.dok].checked=x.checked;queueSave();}));
+  el.querySelectorAll('[data-ddel]').forEach(x=>x.addEventListener('click',()=>{run.docs.splice(Number(x.dataset.ddel),1);queueSave();vMpa(el);}));
+  const dz=document.getElementById('dropAll');
+  dz.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();dz.click();}});
+}
+/* ---------- imports ---------- */
+function handleSeed(obj){
+  if(obj&&obj.type==='cet-payroll-seed'&&Array.isArray(obj.employees)){
+    const existing=new Map(S.employees.map(e=>[e.code,e]));let added=0,updated=0;
+    for(const e of obj.employees){if(existing.has(e.code)){Object.assign(existing.get(e.code),e);updated++;}else{S.employees.push(e);added++;}}
+    if(obj.company)S.company=Object.assign(S.company,obj.company);
+    if(obj.historyYear)S.historyYear=obj.historyYear;
+    if(obj.historyThroughMonth)S.historyThroughMonth=obj.historyThroughMonth;
+    let patched=0;
+    if(obj.runsPatch){for(const[k,rp]of Object.entries(obj.runsPatch)){
+      const run=S.runs[k]||(S.runs[k]={status:'draft',payDate:null,rows:{}});
+      if(rp.payDate)run.payDate=rp.payDate;
+      for(const[code,row]of Object.entries(rp.rows||{})){
+        const base=run.rows[code]||blankRow();
+        run.rows[code]=Object.assign(base,row);patched++;
+      }}}
+    queueSave();render();toast(`นำเข้าแล้ว: เพิ่ม ${added} คน อัปเดต ${updated} คน${patched?` · เติมยอดงวด ${patched} รายการ`:''}`);
+  }else if(obj&&obj.employees&&obj.runs){S=Object.assign(defaultState(),obj);migrate();queueSave();render();toast('กู้คืนข้อมูลสำรองแล้ว');}
+  else toast('ไฟล์ไม่ใช่รูปแบบ seed / backup ของ CET Payroll');
+}
+const EMP_COLS={code:'code',name:'name',taxid:'taxId',position:'position',dept:'dept',email:'email',salary:'salary',pfrate:'pfRate',pferrate:'pfErRate',
+  bankacct:'bankAcct',startym:'startYM',status:'status',resignym:'resignYM',nationality:'nationality',loanmonthly:'loanMonthly',ssoexempt:'ssoExempt',bankfile:'bankTransfer',note:'startNote'};
+const ALLOW_COLS={allow_self:'self',allow_spouse:'spouse',allow_childns:'childNS',allow_childs:'childS',allow_parent:'parent',allow_lifeins:'lifeIns',allow_rmf_ltf:'rmfLtf',allow_ssf_esg:'ssfEsg',allow_special:'special',allow_housing:'housing',allow_donation:'donation'};
+const EMP_HDR=['Code','Name','TaxID','Position','Dept','Email','Salary','PFRate','PFErRate','BankAcct','BankFile','SSOExempt','LoanMonthly',
+  'RecurLabel','RecurAmount','RecurFrom','RecurTo','WHTLevelYear','WHTLevel','WHTLevelBase','StartYM','Status','ResignYM','Nationality','Note',
+  'Allow_Self','Allow_Spouse','Allow_ChildNS','Allow_ChildS','Allow_Parent','Allow_LifeIns','Allow_RMF_LTF','Allow_SSF_ESG','Allow_Special','Allow_Housing','Allow_Donation'];
+const HIST_KEYS={income:'income',other:'other',wht:'wht',ssf:'ssf',pf:'pf',loan:'loan',otherded:'oded',net:'net'};
+let lastXlsxName='';
+const yes=v=>/^(y|yes|true|1|x|✓|ใช่)$/i.test(String(v==null?'':v).trim());
+function ymOf(v){
+  if(v==null||v==='')return'';
+  if(v instanceof Date)return v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0');
+  if(typeof v==='number'&&v>20000){const d=XLSX.SSF.parse_date_code(v);return d?d.y+'-'+String(d.m).padStart(2,'0'):'';}
+  const s=String(v).trim();const m=s.match(/^(\d{4})[-\/.](\d{1,2})/);return m?m[1]+'-'+String(Number(m[2])).padStart(2,'0'):s;
+}
+function handleXlsx(buf){
+  try{
+    const wb=XLSX.read(buf,{type:'array'});
+    if(isMpaWorkbook(wb)){handleMpaWorkbook(wb,lastXlsxName);return;}
+    let empN=0,runN=0,histN=0,legacy=null;
+    const sheets=wb.SheetNames.map(name=>{const aoa=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1});
+      return{name,aoa,hdr:(aoa[0]||[]).map(v=>String(v==null?'':v).trim().toLowerCase())};});
+    const isEmp=s=>/^employees$/i.test(s.name.trim())||(s.hdr[0]==='code'&&s.hdr.includes('name')&&s.hdr.includes('salary'));
+    for(const s of sheets.filter(isEmp))empN+=importEmpSheet(s.aoa,s.hdr);
+    for(const s of sheets){
+      if(!s.aoa.length||isEmp(s))continue;
+      const mRun=s.name.trim().match(/^run[-_ ](\d{4})-(\d{1,2})$/i);
+      const mHist=s.name.trim().match(/^history[-_ ](\d{4})$/i);
+      if(mRun&&s.hdr.includes('code')){runN+=importRunSheet(s.aoa,s.hdr,ym(Number(mRun[1]),Number(mRun[2])));continue;}
+      if(mHist&&s.hdr.includes('code')&&s.hdr.includes('month')){histN+=importHistSheet(s.aoa,s.hdr,Number(mHist[1]));continue;}
+      if(!legacy){
+        for(let i=0;i<Math.min(s.aoa.length,12);i++){
+          const row=(s.aoa[i]||[]).map(v=>String(v||'').toLowerCase());
+          if(row[0]==='no'&&row.some(v=>v&&v.includes('employee'))){legacy={name:s.name,aoa:s.aoa,hdr:i};break;}
+        }
+      }
+    }
+    if(empN||runN||histN){queueSave();render();toast(`นำเข้า Excel แล้ว: พนักงาน ${empN} · ยอดงวด ${runN} · ยอดจริง ${histN} รายการ${histN?' (ถึงเดือน '+S.historyThroughMonth+')':''}`);return;}
+    if(legacy){importLegacyRegister(legacy);return;}
+    toast('ไม่พบชีตที่รู้จัก — ใช้ MPA, ชีต Employees / Run-YYYY-MM / History-YYYY หรือทะเบียนจ่ายรูปแบบเดิม');
+  }catch(e){toast('อ่านไฟล์ Excel ไม่สำเร็จ: '+e.message);}
+}
+function importEmpSheet(aoa,hdr){
+  let n=0;const ci=h=>hdr.indexOf(h);const ciCode=ci('code');
+  for(let i=1;i<aoa.length;i++){
+    const row=aoa[i];if(!row)continue;
+    const code=String(row[ciCode]==null?'':row[ciCode]).trim();if(!code)continue;
+    let e=S.employees.find(x=>x.code===code);
+    if(!e){e={code,name:'',salary:0,pfRate:0,bankAcct:'',taxId:'',position:'',dept:'',email:'',status:'active',allowances:{self:60000}};S.employees.push(e);}
+    const cell=h=>{const c=ci(h);if(c<0)return undefined;const v=row[c];return v==null||String(v).trim()===''?undefined:v;};
+    for(const[h,f]of Object.entries(EMP_COLS)){
+      if(f==='code')continue;let v=cell(h);if(v===undefined)continue;
+      if(['salary','pfRate','pfErRate','loanMonthly'].includes(f))v=num(v);
+      else if(f==='startYM'||f==='resignYM')v=ymOf(v);
+      else if(f==='status')v=/resign|ลาออก/i.test(String(v))?'resigned':'active';
+      else if(f==='ssoExempt')v=yes(v);
+      else if(f==='bankTransfer')v=!/^(n|no|false|0)$/i.test(String(v).trim());
+      else v=String(v).trim();
+      e[f]=v;
+    }
+    if(cell('recuramount')!==undefined){const a=num(cell('recuramount'));
+      e.recurring=a?[{label:String(cell('recurlabel')||''),amount:a,fromYM:ymOf(cell('recurfrom')),toYM:ymOf(cell('recurto'))}]:[];}
+    if(cell('whtlevel')!==undefined){const y=Number(cell('whtlevelyear'))||P.y;e.whtLevel=e.whtLevel||{};
+      e.whtLevel[y]={amt:num(cell('whtlevel')),base:cell('whtlevelbase')!==undefined?num(cell('whtlevelbase')):num(e.salary)};}
+    e.allowances=e.allowances||{};
+    for(const[h,k]of Object.entries(ALLOW_COLS)){const v=cell(h);if(v===undefined)continue;e.allowances[k]=num(v);}
+    n++;
+  }
+  return n;
+}
+function importRunSheet(aoa,hdr,key){
+  const run=S.runs[key]||(S.runs[key]={status:'draft',payDate:null,rows:{}});
+  const F={salaryoverride:'salaryOverride',ot:'ot',incentive:'incentive',otheradd:'otherAdd',studentloan:'studentLoan',otherded:'otherDed',paidadvance:'paidAdvance',whtoverride:'whtOverride',ssooverride:'ssoOverride',pfoverride:'pfOverride'};
+  let n=0;const ciCode=hdr.indexOf('code');
+  for(let i=1;i<aoa.length;i++){
+    const row=aoa[i];if(!row)continue;
+    const code=String(row[ciCode]==null?'':row[ciCode]).trim();if(!code)continue;
+    const r=rowOf(run,code);
+    for(const[h,f]of Object.entries(F)){
+      const ci=hdr.indexOf(h);if(ci<0)continue;const v=row[ci];
+      if(v==null||String(v).trim()==='')continue;r[f]=num(v);
+    }
+    n++;
+  }
+  return n;
+}
+function importHistSheet(aoa,hdr,year){
+  let n=0,maxM=0;const ciCode=hdr.indexOf('code'),ciM=hdr.indexOf('month');
+  if(year&&year!==S.historyYear){S.historyYear=year;S.historyThroughMonth=0;}
+  for(let i=1;i<aoa.length;i++){
+    const row=aoa[i];if(!row)continue;
+    const code=String(row[ciCode]==null?'':row[ciCode]).trim();if(!code)continue;
+    const emp=S.employees.find(x=>x.code===code);if(!emp)continue;
+    const m=Math.round(num(row[ciM]));if(m<1||m>12)continue;
+    emp.history2026=emp.history2026||{};
+    for(const[h,k]of Object.entries(HIST_KEYS)){
+      const ci=hdr.indexOf(h);if(ci<0)continue;const v=row[ci];
+      if(v==null||String(v).trim()==='')continue;
+      emp.history2026[k]=emp.history2026[k]||{};emp.history2026[k][m]=num(v);
+    }
+    maxM=Math.max(maxM,m);n++;
+  }
+  if(maxM>S.historyThroughMonth)S.historyThroughMonth=maxM;
+  return n;
+}
+function importLegacyRegister(best){
+  const run=getRun(true);let n=0;
+  for(let i=best.hdr+1;i<best.aoa.length;i++){
+    const row=best.aoa[i];if(!row)continue;const code=String(row[0]||'').trim();
+    if(!/^CE/i.test(code))continue;
+    const emp=S.employees.find(x=>x.code===code);if(!emp)continue;
+    const r=rowOf(run,code);
+    const sal=num(row[2]);if(sal&&Math.abs(sal-emp.salary)>0.005)r.salaryOverride=sal;
+    r.ot=num(row[3]);r.incentive=num(row[4]);r.otherAdd=num(row[5]);
+    const wht=num(row[7]);r.whtOverride=wht||wht===0?wht:null;
+    const sso=num(row[8]);if(sso)r.ssoOverride=sso;
+    const pf=num(row[9]);r.pfOverride=pf;
+    r.studentLoan=num(row[10]);r.otherDed=num(row[11]);
+    n++;
+  }
+  queueSave();go('run');toast(`นำเข้ายอดจากชีต ${best.name} แล้ว ${n} คน (ภาษีตั้งเป็นค่าจากไฟล์ — ลบ override ได้ในหน้าต่างวิธีคำนวณ)`);
+}
+function exportEmpXlsx(){
+  const aoa=[EMP_HDR];
+  for(const e of [...S.employees].sort((a,b)=>a.code.localeCompare(b.code))){
+    const A=e.allowances||{};const rc=(e.recurring||[])[0]||{};const lv=e.whtLevel&&e.whtLevel[P.y];
+    aoa.push([e.code,e.name,e.taxId||'',e.position||'',e.dept||'',e.email||'',e.salary,e.pfRate||0,isSet(e.pfErRate)?e.pfErRate:'',e.bankAcct||'',
+      e.bankTransfer===false?'N':'Y',e.ssoExempt?'Y':'',num(e.loanMonthly)||'',rc.label||'',num(rc.amount)||'',rc.fromYM||'',rc.toYM||'',
+      lv?P.y:'',lv?lv.amt:'',lv?lv.base:'',e.startYM||'',e.status||'active',e.resignYM||'',e.nationality||'',e.startNote||'',
+      A.self||0,A.spouse||0,A.childNS||0,A.childS||0,A.parent||0,A.lifeIns||0,A.rmfLtf||0,A.ssfEsg||0,A.special||0,A.housing||0,A.donation||0]);
+  }
+  const hist=[['Code','Month','Income','Other','WHT','SSF','PF','Loan','OtherDed','Net']];
+  for(const e of S.employees){const h=e.history2026;if(!h)continue;
+    for(let m=1;m<=12;m++){
+      const g=k=>{const o=h[k]||{};return o[m]!=null?o[m]:(o[String(m)]!=null?o[String(m)]:null);};
+      const vals=['income','other','wht','ssf','pf','loan','oded','net'].map(g);
+      if(vals.some(v=>v!=null))hist.push([e.code,m,...vals.map(v=>v==null?'':v)]);
+    }}
+  saveFile('cet-payroll-employees.xlsx',aoaToXlsx([
+    {name:'Employees',aoa,widths:[9,30,15,22,18,26,10,7,8,16,7,8,9,26,10,9,9,8,10,11,9,9,9,11,30,10,10,11,11,10,12,12,12,11,12,12]},
+    {name:'History-'+S.historyYear,aoa:hist,widths:[9,6,11,11,11,9,9,9,9,11]}]));
+}
+function wireFiles(){
+  const seed=document.createElement('input');seed.type='file';seed.id='fileSeed';seed.accept='.json';
+  seed.addEventListener('change',()=>{const f=seed.files[0];if(!f)return;const rd=new FileReader();
+    rd.onload=()=>{try{handleSeed(JSON.parse(rd.result));}catch(e){toast('อ่านไฟล์ไม่สำเร็จ');}};rd.readAsText(f);seed.value='';});
+  const rest=document.createElement('input');rest.type='file';rest.id='fileRestore';rest.accept='.json';
+  rest.addEventListener('change',()=>{const f=rest.files[0];if(!f)return;const rd=new FileReader();
+    rd.onload=()=>{try{const o=JSON.parse(rd.result);if(o.employees&&o.settings){S=Object.assign(defaultState(),o);S.settings=Object.assign(defaultState().settings,o.settings||{});S.company=Object.assign(defaultState().company,o.company||{});migrate();queueSave();render();toast('กู้คืนข้อมูลแล้ว');}else handleSeed(o);}catch(e){toast('อ่านไฟล์ไม่สำเร็จ');}};rd.readAsText(f);rest.value='';});
+  const xl=document.createElement('input');xl.type='file';xl.id='fileXlsx';xl.accept='.xlsx,.xlsm,.xls';xl.multiple=true;
+  xl.addEventListener('change',()=>{handleFiles(xl.files);xl.value='';});
+  const any=document.createElement('input');any.type='file';any.id='fileAny';any.multiple=true;
+  any.addEventListener('change',()=>{handleFiles(any.files);any.value='';});
+  const dc=document.createElement('input');dc.type='file';dc.id='fileDocs';dc.multiple=true;
+  dc.addEventListener('change',()=>{if(dc.files.length)addDocs(dc.files);dc.value='';});
+  document.body.append(seed,rest,xl,dc,any);
+  let depth=0;const ov=document.getElementById('dropOverlay');
+  const hasFiles=ev=>ev.dataTransfer&&[...ev.dataTransfer.types].includes('Files');
+  document.addEventListener('dragenter',ev=>{if(!hasFiles(ev))return;depth++;ov.hidden=false;});
+  document.addEventListener('dragleave',ev=>{if(!hasFiles(ev))return;depth=Math.max(0,depth-1);if(!depth)ov.hidden=true;});
+  document.addEventListener('dragover',ev=>{if(hasFiles(ev))ev.preventDefault();});
+  document.addEventListener('drop',ev=>{if(!hasFiles(ev))return;ev.preventDefault();depth=0;ov.hidden=true;handleFiles(ev.dataTransfer.files);});
+}
+
+/* ---------- boot ---------- */
+document.querySelectorAll('.navbtn').forEach(b=>b.addEventListener('click',()=>go(b.dataset.v)));
+document.getElementById('pprev').addEventListener('click',()=>shiftP(-1));
+document.getElementById('pnext').addEventListener('click',()=>shiftP(1));
+wireFiles();
+plabel();render();setStat(S.employees.length?'พร้อมใช้งาน':'');
+</script>
+
+</body></html>
