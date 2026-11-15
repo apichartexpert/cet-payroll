@@ -237,7 +237,7 @@ const ALLOW_FIELDS=[
 
 function defaultState(){return {
   company:{nameTH:'บริษัท คอนสแตนท์ เอ็นเนอร์ยี่ เซอร์วิสเซส (ไทยแลนด์) จำกัด',nameEN:'Constant Energy Services (Thailand) Co., Ltd.',
-    taxIdCo:'0105562203030',ssoAccount:'',branch:'0',payBankAcct:'',payBankName:'ธนาคารกรุงเทพ (BBL)',
+    taxIdCo:'0105562203030',ssoAccount:'',ssoBranch:'000000',branch:'0',payBankAcct:'',payBankName:'ธนาคารกรุงเทพ (BBL)',
     bblName:'CET',remitAcct:'',remitName:''},
   settings:{ssoRate:5,ssoCeil:17500,ssoFloor:1650,whtMethod:'level',whtRound:'baht',
     accounts:{
@@ -289,10 +289,12 @@ const num=v=>{const n=parseFloat(String(v==null?'':v).replace(/,/g,''));return i
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const digits=s=>String(s||'').replace(/\D/g,'');
 function toast(t){const d=document.createElement('div');d.className='toast';d.textContent=t;document.body.appendChild(d);setTimeout(()=>d.remove(),2600);}
+const ssoIdOf=e=>digits(e.ssoId)||digits(e.taxId); // foreigners: SSO number differs from the RD tax ID
+const nameThOf=e=>String(e.nameTh||e.name||'').trim(); // Thai name as filed with SSO / RD
 function splitName(full){ // "Mr. Somchai Jaidee" -> {title,first,last}
   let s=String(full||'').trim(),title='';
   const en=s.match(/^(Mrs|Miss|Ms|Mr|Dr)(?:\.\s*|\s+)(.+)$/i);
-  const th=s.match(/^(นางสาว|นาง|นาย|น\.ส\.?)\s*(.+)$/);
+  const th=s.match(/^(ว่าที่ร้อยตรีหญิง|ว่าที่ร้อยตรี|ว่าที่ ร\.ต\.|นางสาว|นาง|นาย|น\.ส\.?)\s*(.+)$/);
   if(en){title=en[1];s=en[2];}else if(th){title=th[1];s=th[2];}
   const parts=s.trim().split(/\s+/);const first=parts.shift()||'';const last=parts.join(' ');
   return{title,first,last};
@@ -555,7 +557,9 @@ window.editEmp=function(code){
     <div class="fgrid">
       <label>รหัสพนักงาน<input id="f_code" value="${esc(e.code)}" ${code?'readonly':''}></label>
       <label>ชื่อ-สกุล (ตามบัตร)<input id="f_name" value="${esc(e.name)}"></label>
+      <label>ชื่อ-สกุลภาษาไทย (ใช้ใน สปส. / ภ.ง.ด.1)<input id="f_nameTh" value="${esc(e.nameTh||'')}"></label>
       <label>เลขประจำตัวผู้เสียภาษี (13 หลัก)<input id="f_taxId" value="${esc(e.taxId||'')}" maxlength="17"></label>
+      <label>เลขประกันสังคม (ถ้าไม่ตรงกับเลขผู้เสียภาษี)<input id="f_ssoId" value="${esc(e.ssoId||'')}" maxlength="17"></label>
       <label>ตำแหน่ง<input id="f_position" value="${esc(e.position||'')}"></label>
       <label>แผนก<input id="f_dept" value="${esc(e.dept||'')}"></label>
       <label>อีเมล<input id="f_email" value="${esc(e.email||'')}"></label>
@@ -607,7 +611,7 @@ window.saveEmp=function(code){
   const newCode=g('f_code');if(!newCode){toast('กรุณากรอกรหัสพนักงาน');return;}
   let e=code?S.employees.find(x=>x.code===code):null;
   if(!e){if(S.employees.some(x=>x.code===newCode)){toast('รหัส '+newCode+' มีอยู่แล้ว');return;}e={code:newCode};S.employees.push(e);}
-  e.name=g('f_name');e.taxId=g('f_taxId');e.position=g('f_position');e.dept=g('f_dept');e.email=g('f_email');
+  e.name=g('f_name');e.nameTh=g('f_nameTh');e.ssoId=g('f_ssoId');e.taxId=g('f_taxId');e.position=g('f_position');e.dept=g('f_dept');e.email=g('f_email');
   e.salary=num(g('f_salary'));e.pfRate=num(g('f_pfRate'));e.bankAcct=g('f_bankAcct');
   e.startYM=g('f_startYM');e.status=document.getElementById('f_status').value;e.resignYM=g('f_resignYM');
   e.pfErRate=g('f_pfErRate')===''?null:num(g('f_pfErRate'));e.loanMonthly=num(g('f_loanMonthly'));
@@ -801,7 +805,7 @@ function vPnd1(el){
 function pnd1Rows(){
   const t=runTotals();const run=getRun(false);const payDate=(run&&run.payDate)||defaultPayDate();
   const[yy,mm,dd]=payDate.split('-');const thDate=dd+'/'+mm+'/'+(Number(yy)+543);
-  return t.rows.filter(x=>x.c.total>0).map((x,i)=>{const n=splitName(x.e.name);
+  return t.rows.filter(x=>x.c.total>0).map((x,i)=>{const n=splitName(nameThOf(x.e));
     return{seq:i+1,taxId:digits(x.e.taxId),title:n.title,first:n.first,last:n.last,date:thDate,income:x.c.total,tax:x.c.wht};});
 }
 function exportPnd1Xlsx(){
@@ -821,50 +825,54 @@ function exportPnd1Txt(){
 }
 
 /* ---------- SSO ---------- */
+/* SSO screen and exports follow the filed สปส.1-10 part 2: national ID (foreigners: SSO number), Thai name, full wage paid, employee contribution */
+function ssoRows(){const t=runTotals();return t.rows.filter(x=>x.c.sso>0||x.ssoEr>0);}
 function vSso(el){
-  const st=S.settings;const t=runTotals();
-  const rows=t.rows.filter(x=>x.c.sso>0||x.ssoEr>0);
+  const st=S.settings;const rows=ssoRows();
   const totEe=rows.reduce((s,x)=>s+x.c.sso,0),totEr=rows.reduce((s,x)=>s+x.ssoEr,0);
-  const totWage=rows.reduce((s,x)=>s+Math.min(Math.max(x.c.sal,st.ssoFloor),st.ssoCeil),0);
+  const totWage=rows.reduce((s,x)=>s+x.c.sal,0);
+  const noId=rows.filter(x=>ssoIdOf(x.e).length!==13);
   el.innerHTML=`
   <h2>ประกันสังคม (สปส.1-10) — ${THMONTH[P.m-1]} ${P.y}</h2>
-  <p class="sub">อัตรา ${st.ssoRate}% ของค่าจ้าง (ขั้นต่ำ ${fmt0(st.ssoFloor)} สูงสุด ${fmt0(st.ssoCeil)} บาท) · นำส่งภายในวันที่ 15 ของเดือนถัดไป</p>
+  <p class="sub">บัญชีนายจ้าง ${esc(S.company.ssoAccount||'—')} สาขา ${esc(S.company.ssoBranch||'000000')} · อัตรา ${st.ssoRate}% ของค่าจ้าง (ขั้นต่ำ ${fmt0(st.ssoFloor)} สูงสุด ${fmt0(st.ssoCeil)} บาท) · นำส่งภายในวันที่ 15 ของเดือนถัดไป</p>
   <div class="cards">
     <div class="card"><div class="k">ผู้ประกันตน</div><div class="v num">${rows.length} คน</div></div>
-    <div class="card"><div class="k">ค่าจ้างตามฐาน</div><div class="v num">${fmt(totWage)}</div></div>
+    <div class="card"><div class="k">ค่าจ้าง</div><div class="v num">${fmt(totWage)}</div></div>
     <div class="card"><div class="k">เงินสมทบลูกจ้าง</div><div class="v num">${fmt(totEe)}</div></div>
     <div class="card"><div class="k">เงินสมทบนายจ้าง</div><div class="v num">${fmt(totEr)}</div></div>
     <div class="card acc"><div class="k">รวมนำส่ง</div><div class="v num">${fmt(totEe+totEr)}</div></div>
   </div>
-  <div class="panel"><div class="hd"><h3>รายชื่อผู้ประกันตน</h3>
+  ${!S.company.ssoAccount?'<div class="note warn">ยังไม่ได้ใส่เลขที่บัญชีนายจ้าง สปส. — ใส่ที่หน้า ตั้งค่า</div>':''}
+  ${noId.length?`<div class="note warn">ยังไม่มีเลขประจำตัวประชาชน / เลขประกันสังคม 13 หลัก ${noId.length} คน: ${noId.slice(0,10).map(x=>esc(x.e.code)).join(', ')}${noId.length>10?' …':''}</div>`:''}
+  <div class="panel"><div class="hd"><h3>สปส.1-10 ส่วนที่ 2</h3>
     <button class="btn" onclick="exportSsoTxt()">ไฟล์ .txt (e-Service)</button>
     <button class="btn pri" onclick="exportSsoXlsx()">ส่งออก Excel</button>
   </div>
   <div class="tblwrap" style="max-height:58vh;overflow-y:auto"><table><thead><tr>
-    <th class="r">ลำดับ</th><th>เลขบัตรประชาชน</th><th>ชื่อ-สกุล</th><th class="r">ค่าจ้างจริง</th><th class="r">ฐานคำนวณ</th><th class="r">สมทบลูกจ้าง</th><th class="r">สมทบนายจ้าง</th></tr></thead><tbody>
-    ${rows.map((x,i)=>{const base=Math.min(Math.max(x.c.sal,st.ssoFloor),st.ssoCeil);return `<tr>
-      <td class="r num">${i+1}</td><td class="num">${esc(x.e.taxId||'')}</td><td class="name-cell">${esc(x.e.name)}</td>
-      <td class="r num">${fmt(x.c.sal)}</td><td class="r num">${fmt(base)}</td><td class="r num">${fmt(x.c.sso)}</td><td class="r num">${fmt(x.ssoEr)}</td></tr>`;}).join('')}
-  </tbody><tfoot><tr><td colspan="4">รวม ${rows.length} ราย</td><td class="r num">${fmt(totWage)}</td><td class="r num">${fmt(totEe)}</td><td class="r num">${fmt(totEr)}</td></tr></tfoot></table></div></div>
-  <div class="note">เงินสมทบนายจ้างใช้อัตราเดียวกับลูกจ้าง (${st.ssoRate}%) · ไฟล์ .txt รูปแบบ เลขบัตร|คำนำหน้า|ชื่อ|สกุล|ค่าจ้าง|เงินสมทบ สำหรับแนบในระบบ SSO e-Service — ตรวจรูปแบบกับระบบก่อนนำส่งครั้งแรก</div>`;
+    <th class="r">ลำดับที่</th><th>เลขประจำตัวประชาชน</th><th>ชื่อ-ชื่อสกุล</th><th class="r">ค่าจ้าง</th><th class="r">เงินสมทบ</th><th class="r">สมทบนายจ้าง</th></tr></thead><tbody>
+    ${rows.map((x,i)=>`<tr>
+      <td class="r num">${i+1}</td><td class="num">${esc(ssoIdOf(x.e))||'<span class="chip r">ไม่มี</span>'}</td><td class="name-cell">${esc(nameThOf(x.e))}</td>
+      <td class="r num">${fmt(x.c.sal)}</td><td class="r num">${fmt(x.c.sso)}</td><td class="r num">${fmt(x.ssoEr)}</td></tr>`).join('')}
+  </tbody><tfoot><tr><td colspan="3">ยอดรวม ${rows.length} ราย</td><td class="r num">${fmt(totWage)}</td><td class="r num">${fmt(totEe)}</td><td class="r num">${fmt(totEr)}</td></tr></tfoot></table></div></div>
+  <div class="note">รูปแบบเดียวกับ สปส.1-10 ส่วนที่ 2 ที่ยื่นจริง: เลขประจำตัวประชาชน (ชาวต่างชาติใช้เลขประกันสังคม), ชื่อภาษาไทย, ค่าจ้างที่จ่ายจริงทั้งเดือน, เงินสมทบผู้ประกันตน · เงินสมทบนายจ้างเท่ากับลูกจ้าง (${st.ssoRate}%) · ไฟล์ .txt รูปแบบ เลขบัตร|คำนำหน้า|ชื่อ|สกุล|ค่าจ้าง|เงินสมทบ — ตรวจรูปแบบกับระบบ e-Service ก่อนนำส่งครั้งแรก</div>`;
 }
 function exportSsoXlsx(){
-  const st=S.settings;const t=runTotals();const rows=t.rows.filter(x=>x.c.sso>0||x.ssoEr>0);
+  const rows=ssoRows();
+  const totWage=rows.reduce((s,x)=>s+x.c.sal,0),totEe=rows.reduce((s,x)=>s+x.c.sso,0),totEr=rows.reduce((s,x)=>s+x.ssoEr,0);
   const aoa=[['แบบรายการแสดงการส่งเงินสมทบ สปส.1-10 (ส่วนที่ 2)'],
-    ['ชื่อสถานประกอบการ',S.company.nameTH,'เลขที่บัญชีนายจ้าง',S.company.ssoAccount,'ลำดับที่สาขา',S.company.branch],
-    ['งวดเดือน',THMONTH[P.m-1]+' '+(P.y+543),'อัตราเงินสมทบ',st.ssoRate+'%'],[],
-    ['ลำดับ','เลขประจำตัวประชาชน','คำนำหน้า','ชื่อ','นามสกุล','ค่าจ้าง','เงินสมทบลูกจ้าง','เงินสมทบนายจ้าง']];
-  rows.forEach((x,i)=>{const n=splitName(x.e.name);const base=Math.min(Math.max(x.c.sal,st.ssoFloor),st.ssoCeil);
-    aoa.push([i+1,digits(x.e.taxId),n.title,n.first,n.last,base,x.c.sso,x.ssoEr]);});
-  const totEe=rows.reduce((s,x)=>s+x.c.sso,0),totEr=rows.reduce((s,x)=>s+x.ssoEr,0);
-  aoa.push(['','','','','รวม',rows.reduce((s,x)=>s+Math.min(Math.max(x.c.sal,st.ssoFloor),st.ssoCeil),0),totEe,totEr]);
-  saveFile(`SSO_${pkey()}_CET.xlsx`,aoaToXlsx([{name:'สปส1-10',aoa,widths:[6,16,8,16,20,12,12,12]}]));
+    ['การนำส่งเงินสมทบสำหรับค่าจ้างเดือน',THMONTH[P.m-1]+' '+(P.y+543)],
+    ['ชื่อสถานประกอบการ',S.company.nameTH,'เลขที่บัญชี',S.company.ssoAccount||'','สาขา',S.company.ssoBranch||'000000'],[],
+    ['ลำดับที่','เลขประจำตัวประชาชน','ชื่อ-ชื่อสกุล','ค่าจ้าง','เงินสมทบ']];
+  rows.forEach((x,i)=>aoa.push([i+1,ssoIdOf(x.e),nameThOf(x.e),r2(x.c.sal),r2(x.c.sso)]));
+  aoa.push(['','','ยอดรวม',r2(totWage),r2(totEe)],[],
+    ['','','เงินสมทบผู้ประกันตน','',r2(totEe)],['','','เงินสมทบนายจ้าง','',r2(totEr)],['','','รวมเงินสมทบนำส่ง','',r2(totEe+totEr)]);
+  saveFile(`SSO1-10_${pkey()}_CET.xlsx`,aoaToXlsx([{name:'สปส1-10 ส่วนที่2',aoa,widths:[8,18,42,14,12,10]}]));
 }
 function exportSsoTxt(){
-  const st=S.settings;const t=runTotals();const rows=t.rows.filter(x=>x.c.sso>0);
-  const txt=rows.map(x=>{const n=splitName(x.e.name);const base=Math.min(Math.max(x.c.sal,st.ssoFloor),st.ssoCeil);
-    return[digits(x.e.taxId),n.title,n.first,n.last,base.toFixed(2),x.c.sso.toFixed(2)].join('|');}).join('\r\n');
-  saveFile(`SSO_${pkey()}_CET.txt`,txt);
+  const rows=ssoRows().filter(x=>x.c.sso>0);
+  const txt=rows.map(x=>{const n=splitName(nameThOf(x.e));
+    return[ssoIdOf(x.e),n.title,n.first,n.last,x.c.sal.toFixed(2),x.c.sso.toFixed(2)].join('|');}).join('\r\n');
+  saveFile(`SSO1-10_${pkey()}_CET.txt`,txt);
 }
 
 /* ---------- bank ---------- */
@@ -1006,6 +1014,7 @@ function vSet(el){
     <label>เลขประจำตัวผู้เสียภาษี (13 หลัก)<input data-c="taxIdCo" value="${esc(C.taxIdCo)}"></label>
     <label>สาขาที่<input data-c="branch" value="${esc(C.branch)}"></label>
     <label>เลขที่บัญชีนายจ้าง สปส. (10 หลัก)<input data-c="ssoAccount" value="${esc(C.ssoAccount)}"></label>
+    <label>ลำดับที่สาขา สปส. (6 หลัก)<input data-c="ssoBranch" value="${esc(C.ssoBranch||'000000')}"></label>
     <label>ธนาคารที่จ่ายเงินเดือน<input data-c="payBankName" value="${esc(C.payBankName)}"></label>
     <label>เลขบัญชีจ่ายเงินเดือน<input data-c="payBankAcct" value="${esc(C.payBankAcct)}"></label>
     <label>ชื่อบริษัทในไฟล์ BBL (สูงสุด 25 ตัว)<input data-c="bblName" value="${esc(C.bblName||'CET')}" maxlength="25"></label>
@@ -1702,7 +1711,7 @@ async function openWorkbookItem(it,pw){
       it.msg=`ชีต ${p.reg.sheet} · ${p.reg.rows.length} คน${p.tc?' · '+p.tc.sheet:''} · ตรวจยอดด้านล่างแล้วกด "บันทึกเป็นยอดจริง"`;
     }else{
       const r=importDataWorkbook(wb);
-      if(r.empN||r.runN||r.histN){it.kind='data';it.status='done';it.msg=`พนักงาน ${r.empN} · ยอดงวด ${r.runN} · ยอดจริง ${r.histN} รายการ (ถึงเดือน ${S.historyThroughMonth})`;queueSave();}
+      if(r.empN||r.runN||r.histN||r.compN){it.kind='data';it.status='done';it.msg=`พนักงาน ${r.empN} · ยอดงวด ${r.runN} · ยอดจริง ${r.histN} รายการ${r.compN?' · ข้อมูลบริษัท '+r.compN+' ช่อง':''} (ถึงเดือน ${S.historyThroughMonth})`;queueSave();}
       else if(r.legacy){importLegacyRegister(r.legacy);it.kind='legacy';it.status='done';it.msg='นำยอดจากชีต '+r.legacy.name+' เข้าทะเบียนจ่ายงวดนี้';}
       else if(wb.SheetNames.includes('Payroll')&&wb.SheetNames.some(n=>/^sheet\d/i.test(n))){addDocs([{name:it.name,size:it.size}],true);it.kind='bbl';it.status='done';it.msg='บันทึกเป็นเอกสารประกอบ (ไฟล์โอน BBL)';}
       else{it.kind='doc';it.status='error';it.msg='ไม่รู้จักรูปแบบไฟล์ Excel นี้';}
@@ -1725,7 +1734,11 @@ function importDataWorkbook(wb){
     if(!legacy)for(let i=0;i<Math.min(s.aoa.length,12);i++){const row=(s.aoa[i]||[]).map(v=>String(v||'').toLowerCase());
       if(row[0]==='no'&&row.some(v=>v&&v.includes('employee'))){legacy={name:s.name,aoa:s.aoa,hdr:i};break;}}
   }
-  return{empN,runN,histN,legacy};
+  let compN=0; // optional "Company" sheet: Field | Value rows set company settings
+  for(const s of sheets.filter(s=>/^company$/i.test(s.name.trim())))for(const r of s.aoa.slice(1)){
+    const k=String((r||[])[0]==null?'':r[0]).trim(),v=(r||[])[1];
+    if(k&&k in S.company&&v!=null&&String(v).trim()!==''){S.company[k]=String(v).trim();compN++;}}
+  return{empN,runN,histN,legacy,compN};
 }
 window.submitPw=function(id){const it=IMP.files.find(x=>x.id===id);const inp=document.getElementById('pw_'+id);if(!it||!inp||!inp.value)return;
   const pw=inp.value;inp.value='';openWorkbookItem(it,pw);};
@@ -1852,10 +1865,10 @@ function handleSeed(obj){
   }else if(obj&&obj.employees&&obj.runs){S=Object.assign(defaultState(),obj);migrate();queueSave();render();toast('กู้คืนข้อมูลสำรองแล้ว');}
   else toast('ไฟล์ไม่ใช่รูปแบบ seed / backup ของ CET Payroll');
 }
-const EMP_COLS={code:'code',name:'name',taxid:'taxId',position:'position',dept:'dept',email:'email',salary:'salary',pfrate:'pfRate',pferrate:'pfErRate',
+const EMP_COLS={code:'code',name:'name',nameth:'nameTh',taxid:'taxId',ssoid:'ssoId',position:'position',dept:'dept',email:'email',salary:'salary',pfrate:'pfRate',pferrate:'pfErRate',
   bankacct:'bankAcct',startym:'startYM',status:'status',resignym:'resignYM',nationality:'nationality',loanmonthly:'loanMonthly',ssoexempt:'ssoExempt',bankfile:'bankTransfer',note:'startNote'};
 const ALLOW_COLS={allow_self:'self',allow_spouse:'spouse',allow_childns:'childNS',allow_childs:'childS',allow_parent:'parent',allow_lifeins:'lifeIns',allow_rmf_ltf:'rmfLtf',allow_ssf_esg:'ssfEsg',allow_special:'special',allow_housing:'housing',allow_donation:'donation'};
-const EMP_HDR=['Code','Name','TaxID','Position','Dept','Email','Salary','PFRate','PFErRate','BankAcct','BankFile','SSOExempt','LoanMonthly',
+const EMP_HDR=['Code','Name','NameTH','TaxID','SSOID','Position','Dept','Email','Salary','PFRate','PFErRate','BankAcct','BankFile','SSOExempt','LoanMonthly',
   'RecurLabel','RecurAmount','RecurFrom','RecurTo','WHTLevelYear','WHTLevel','WHTLevelBase','StartYM','Status','ResignYM','Nationality','Note',
   'Allow_Self','Allow_Spouse','Allow_ChildNS','Allow_ChildS','Allow_Parent','Allow_LifeIns','Allow_RMF_LTF','Allow_SSF_ESG','Allow_Special','Allow_Housing','Allow_Donation'];
 const HIST_KEYS={income:'income',other:'other',wht:'wht',ssf:'ssf',pf:'pf',loan:'loan',otherded:'oded',net:'net'};
@@ -1978,7 +1991,7 @@ function exportEmpXlsx(){
   const aoa=[EMP_HDR];
   for(const e of [...S.employees].sort((a,b)=>a.code.localeCompare(b.code))){
     const A=e.allowances||{};const rc=(e.recurring||[])[0]||{};const lv=e.whtLevel&&e.whtLevel[P.y];
-    aoa.push([e.code,e.name,e.taxId||'',e.position||'',e.dept||'',e.email||'',e.salary,e.pfRate||0,isSet(e.pfErRate)?e.pfErRate:'',e.bankAcct||'',
+    aoa.push([e.code,e.name,e.nameTh||'',e.taxId||'',e.ssoId||'',e.position||'',e.dept||'',e.email||'',e.salary,e.pfRate||0,isSet(e.pfErRate)?e.pfErRate:'',e.bankAcct||'',
       e.bankTransfer===false?'N':'Y',e.ssoExempt?'Y':'',num(e.loanMonthly)||'',rc.label||'',num(rc.amount)||'',rc.fromYM||'',rc.toYM||'',
       lv?P.y:'',lv?lv.amt:'',lv?lv.base:'',e.startYM||'',e.status||'active',e.resignYM||'',e.nationality||'',e.startNote||'',
       A.self||0,A.spouse||0,A.childNS||0,A.childS||0,A.parent||0,A.lifeIns||0,A.rmfLtf||0,A.ssfEsg||0,A.special||0,A.housing||0,A.donation||0]);
