@@ -216,7 +216,7 @@ dialog .dft{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:
 /* ================= state ================= */
 const LSKEY='cet.payroll.v1';
 const THMONTH=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
-const BRACKETS=[[150000,0],[300000,.05],[500000,.10],[750000,.15],[1000000,.20],[2000000,.25],[4000000,.30],[Infinity,.35]];
+const BRACKETS=[[150000,0],[300000,.05],[500000,.10],[750000,.15],[1000000,.20],[2000000,.25],[5000000,.30],[Infinity,.35]];
 const ALLOW_FIELDS=[
  ['self','ส่วนตัว (60,000)'],['spouse','คู่สมรส'],['childNS','บุตรไม่ศึกษา'],['childS','บุตรกำลังศึกษา'],
  ['parent','บิดามารดา'],['lifeIns','เบี้ยประกันชีวิต/สุขภาพ'],['rmfLtf','RMF / LTF / กองทุนลดหย่อน'],
@@ -330,8 +330,8 @@ function annualTax(emp,annReg,annOther,annSSO,annPF){
   const expense=Math.min(gross*0.5,100000);
   const A=emp.allowances||{};
   let allow=num(A.self)||60000;
-  allow+=num(A.spouse)+num(A.childNS)+num(A.childS)+num(A.parent)+Math.min(num(A.lifeIns),100000)
-        +num(A.rmfLtf)+num(A.ssfEsg)+num(A.special)+Math.min(num(A.housing),100000);
+  allow+=num(A.spouse)+num(A.childNS)+num(A.childS)+num(A.parent)+num(A.lifeIns)
+        +num(A.rmfLtf)+num(A.ssfEsg)+num(A.special)+num(A.housing);
   allow+=Math.min(annSSO,st.ssoCeil*12*st.ssoRate/100);
   allow+=annPF;
   const beforeDonate=Math.max(0,gross-expense-allow);
@@ -356,15 +356,20 @@ function computeWHT(emp,r,y,m){
       if(d){annReg+=d.income;annOther+=d.other;annSSO+=d.sso;annPF+=d.pf;whtYTD+=d.wht;months.push({m:mm,inc:d.income,oth:d.other,wht:d.wht,src:d.src});}
       else{months.push({m:mm,inc:0,oth:0,wht:0,src:'-'});if(isEmployed(emp,y,mm)&&!(y===S.historyYear&&emp.history2026&&mm<=S.historyThroughMonth))gaps.push(mm);}
     }else{
-      const inc=mm===m?curSal:(isEmployed(emp,y,mm)?curSal:0);
+      const inc=mm===m?curSal:(isEmployed(emp,y,mm)?num(emp.salary):0);
       const oth=mm===m?curOther:0;
-      const sso=inc>0?ssoOf(emp,inc):0;const pf=inc>0?pfOf(emp,inc):0;
+      const cur=mm===m&&r;
+      const sso=cur&&r.ssoOverride!=null?num(r.ssoOverride):inc>0?ssoOf(emp,inc):0;const pf=cur&&r.pfOverride!=null?num(r.pfOverride):inc>0?pfOf(emp,inc):0;
       annReg+=inc;annOther+=oth;annSSO+=sso;annPF+=pf;
       months.push({m:mm,inc,oth,wht:null,src:mm===m?'cur':'proj'});
     }
   }
   const all=annualTax(emp,annReg,annOther,annSSO,annPF);
-  const excl=annualTax(emp,annReg,annOther-curOther,annSSO,annPF);
+  /* level method: the gap between this month's salary and the normal salary is taxed like a one-off */
+  const master=num(emp.salary)||curSal;
+  const curSso=r&&r.ssoOverride!=null?num(r.ssoOverride):curSal>0?ssoOf(emp,curSal):0,curPf=r&&r.pfOverride!=null?num(r.pfOverride):curSal>0?pfOf(emp,curSal):0,mSso=master>0?ssoOf(emp,master):0,mPf=master>0?pfOf(emp,master):0;
+  const excl=st.whtMethod==='level'?annualTax(emp,annReg-curSal+master,annOther-curOther,annSSO-curSso+mSso,annPF-curPf+mPf)
+    :annualTax(emp,annReg,annOther-curOther,annSSO,annPF);
   const taxReg=annualTax(emp,annReg,0,annSSO,annPF).tax;
   const remaining=12-m+1;
   const roundW=w=>st.whtRound==='baht'?Math.round(w):st.whtRound==='bahtUp'?Math.ceil(w):r2(w);
@@ -374,14 +379,14 @@ function computeWHT(emp,r,y,m){
     if(m>=lastEmployedMonth(emp,y)){wht=r2(Math.max(0,all.tax-whtYTD));how='plug';}
     else{
       const lv=emp.whtLevel&&emp.whtLevel[y];
-      if(lv&&Math.abs(num(lv.base)-curSal)<0.005){level=num(lv.amt);how='level';}
+      if(lv&&Math.abs(num(lv.base)-master)<0.005){level=num(lv.amt);how='level';}
       else{level=roundW(Math.max(0,(excl.tax-whtYTD)/remaining));how='relevel';}
       wht=r2(Math.max(0,level+extra));
     }
   }else if(st.whtMethod==='catchup'){wht=roundW(Math.max(0,(all.tax-whtYTD)/remaining));how='catchup';}
   else{wht=roundW(taxReg/12+Math.max(0,all.tax-taxReg)*(curOther>0?(curOther/Math.max(annOther,curOther)):0));how='std12';}
   return{wht,detail:{annReg,annOther,gross:all.gross,expense:all.expense,allow:all.allow,donate:all.donate,taxableAll:all.taxable,
-    taxAll:all.tax,taxExcl:excl.tax,taxReg,whtYTD,remaining,annSSO,annPF,months,gaps,level,extra,how,curSal,curOther}};
+    taxAll:all.tax,taxExcl:excl.tax,taxReg,whtYTD,remaining,annSSO,annPF,months,gaps,level,extra,how,curSal,curOther,master}};
 }
 function isEmployed(emp,y,m){
   if(emp.resignYM){const[ry,rm]=emp.resignYM.split('-').map(Number);if(y>ry||(y===ry&&m>rm))return false;}
@@ -691,7 +696,7 @@ window.lockRun=function(){const r=getRun(true);
     if(S.settings.whtMethod==='level'){
       const d=computeWHT(e,row,P.y,P.m).detail;
       const lvl=row.whtOverride!=null?r2(Math.max(0,num(row.whtOverride)-d.extra)):d.level;
-      if(lvl!=null){e.whtLevel=e.whtLevel||{};e.whtLevel[P.y]={amt:lvl,base:c.sal};}
+      if(lvl!=null){e.whtLevel=e.whtLevel||{};e.whtLevel[P.y]={amt:lvl,base:num(e.salary)||c.sal};}
     }
     if(row.whtOverride==null)row.whtOverride=c.wht;if(row.ssoOverride==null)row.ssoOverride=c.sso;if(row.pfOverride==null)row.pfOverride=c.pf;
     if(!isSet(row.incentive))row.incentive=c.inc;if(!isSet(row.studentLoan))row.studentLoan=c.loan;
@@ -734,7 +739,8 @@ function brkHow(d){
   if(d.how==='plug')return `เดือนสุดท้ายของปี/ของการทำงาน: ภาษีทั้งปี ${fmt(d.taxAll)} − หักแล้ว ${fmt(d.whtYTD)}`;
   if(d.how==='level'||d.how==='relevel'){
     const lv=d.how==='level'?`ระดับปกติ ${fmt(d.level)}`:`ระดับใหม่ ${fmt(d.level)} = (${fmt0(d.taxExcl)} − หักแล้ว ${fmt0(d.whtYTD)}) ÷ ${d.remaining}`;
-    return d.curOther?`${lv} + ภาษีส่วนเพิ่มของเงินได้ครั้งคราว ${fmt(d.curOther)} = ${fmt(d.extra)}`:lv;
+    const gap=r2(d.curSal-(d.master||d.curSal));const one=r2(d.curOther+gap);
+    return one?`${lv} + ภาษีส่วนเพิ่มของเงินได้ครั้งคราว${gap?' (รวมส่วนต่างเงินเดือน '+fmt(gap)+')':''} ${fmt(one)} = ${fmt(d.extra)}`:lv;
   }
   if(d.how==='catchup')return `(${fmt0(d.taxAll)} − หักแล้ว ${fmt0(d.whtYTD)}) ÷ ${d.remaining} เดือน`;
   return 'ภาษีเงินเดือนทั้งปี ÷ 12 + ส่วนของเงินได้อื่น';
@@ -1417,7 +1423,7 @@ function parseTaxCalc(wb,y){
   const codes=aoa[ci],names=aoa[ci+1]||[];const cols=[];const cc=codes.findIndex(x=>txt(x)==='Company :');
   for(let c=cc+1;c<codes.length;c++){const code=txt(codes[c]),nm=txt(names[c]);if(/^CE/i.test(code))cols.push({c,code:code.toUpperCase(),name:nm});else if(nm&&!/^CE/i.test(code)&&c>6)cols.push({c,code:'',name:nm});}
   const sec={inc:'monthly incomes',oth:'monthly other incomes',allow:'allowances',ssf:'monthly ssf',pf:'monthly provid',wht:'monthly withholding'};
-  const res={};for(const col of cols)res[col.code||('NAME:'+col.name)]={col:col.c,code:col.code,name:col.name,inc:{},oth:{},ssf:{},pf:{},wht:{},allow:{}};
+  const res={};for(const col of cols)res[col.code||('NAME:'+col.name)]={col:col.c,code:col.code,name:col.name,inc:{},oth:{},ssf:{},pf:{},wht:{},othB:{},whtB:{},allow:{}};
   let cur=null;
   for(let i=ci+2;i<aoa.length;i++){
     const l=lab(aoa[i]);if(!l)continue;
@@ -1431,7 +1437,8 @@ function parseTaxCalc(wb,y){
       continue;
     }
     const mi=MONTH_FULL.findIndex(mn=>l.includes(mn));if(mi<0)continue;
-    for(const r of Object.values(res)){const x=aoa[i][r.col];if(typeof x==='number'&&x)r[cur][mi+1]=r2((r[cur][mi+1]||0)+x);}
+    const bonus=/bonus/.test(l)&&(cur==='oth'||cur==='wht');
+    for(const r of Object.values(res)){const x=aoa[i][r.col];if(typeof x==='number'&&x){r[cur][mi+1]=r2((r[cur][mi+1]||0)+x);if(bonus)r[cur+'B'][mi+1]=r2((r[cur+'B'][mi+1]||0)+x);}}
   }
   return{sheet:name,people:res};
 }
@@ -1475,11 +1482,12 @@ function applyRegister(p){
     else if(t&&m<12&&x.sal>0){e.status='resigned';e.resignYM=key;left.push(code);}
     run.rows[code]={ot:x.ot,incentive:x.inc,otherAdd:x.oadd,studentLoan:x.loan,otherDed:x.oded,paidAdvance:0,whtOverride:x.wht,ssoOverride:x.sso,pfOverride:x.pf,
       salaryOverride:Math.abs(x.sal-num(e.salary))>0.005?x.sal:null,exclude:false};
-    e.history2026=e.history2026||{};const H=e.history2026;for(const k of['income','other','wht','ssf','pf','loan','oded','net'])H[k]=H[k]||{};
+    e.history2026=e.history2026||{};const H=e.history2026;for(const k of['income','other','wht','ssf','pf','loan','oded','net','otherB','whtB'])H[k]=H[k]||{};
     if(t){for(let mm=1;mm<m;mm++){const g=(o)=>o[mm]||0;
-        if(g(t.inc)||g(t.oth)||g(t.wht)){H.income[mm]=g(t.inc);H.other[mm]=g(t.oth);H.wht[mm]=g(t.wht);H.ssf[mm]=g(t.ssf);H.pf[mm]=g(t.pf);}}
+        if(g(t.inc)||g(t.oth)||g(t.wht)){H.income[mm]=g(t.inc);H.other[mm]=g(t.oth);H.wht[mm]=g(t.wht);H.ssf[mm]=g(t.ssf);H.pf[mm]=g(t.pf);
+          if(g(t.othB))H.otherB[mm]=g(t.othB);if(g(t.whtB))H.whtB[mm]=g(t.whtB);}}
       for(const[k,v]of Object.entries(t.allow))if(k)e.allowances[k]=v;
-      if(m<12&&t.wht[m+1]!=null&&nextInc>0)e.whtLevel={[y]:{amt:t.wht[m+1],base:nextInc}};}
+      if(m<12&&nextInc>0)e.whtLevel={[y]:{amt:num(t.wht[m+1]),base:nextInc}};}
     else if(!(x.ot||x.inc||x.oadd))e.whtLevel={[y]:{amt:x.wht,base:x.sal}};
     if(isNew){const first=[...Array(m).keys()].map(i=>i+1).find(mm=>num(H.income[mm])>0);if(first)e.startYM=ym(y,first);}
     H.income[m]=x.sal;H.other[m]=r2(x.ot+x.inc+x.oadd);H.wht[m]=x.wht;H.ssf[m]=x.sso;H.pf[m]=x.pf;H.loan[m]=x.loan;H.oded[m]=x.oded;H.net[m]=x.net;
@@ -1492,56 +1500,80 @@ function applyRegister(p){
   return{added,count:rows.length,left};
 }
 
-/* export in the CET register layout: monthly sheet (MMMYYYY) + Tax calculation sheet; every formula carries its computed value */
-const NUMFMT='#,##0.00;[Red]-#,##0.00;"-"';
-const sty={title:{font:{bold:true,sz:12}},bold:{font:{bold:true}},
-  head:{font:{bold:true},fill:{fgColor:{rgb:'E2EFDA'}},alignment:{wrapText:true,vertical:'center',horizontal:'center'},border:{top:{style:'thin'},bottom:{style:'thin'}}},
-  total:{font:{bold:true},border:{top:{style:'thin'},bottom:{style:'double'}}}};
-function cellsFrom(aoa){const ws=XLSX.utils.aoa_to_sheet(aoa.map(r=>r.map(c=>c&&typeof c==='object'?null:c)));
-  aoa.forEach((r,ri)=>r.forEach((c,ci)=>{if(c&&typeof c==='object'){ws[XLSX.utils.encode_cell({r:ri,c:ci})]=Object.assign({t:'n'},c);}}));
+/* export in the CET register layout: monthly sheet (MMMYYYY) + "Tax calculationNN" laid out row for row like the CET workbook.
+   Every formula carries its computed value so the file reads correctly before Excel recalculates. */
+const ACC='_-* #,##0.00_-;\\-* #,##0.00_-;_-* "-"??_-;_-@_-';
+const FONT={name:'Calibri',sz:11};
+const sty={bold:{font:{...FONT,bold:true}},plain:{font:FONT}};
+function cellsFrom(aoa){
+  const ws=XLSX.utils.aoa_to_sheet(aoa.map(r=>r.map(c=>c&&typeof c==='object'?null:c)));
+  aoa.forEach((r,ri)=>r.forEach((c,ci)=>{const a=XLSX.utils.encode_cell({r:ri,c:ci});
+    if(c&&typeof c==='object')ws[a]=Object.assign({t:'n'},c,{s:c.s||sty.plain});
+    else if(ws[a])ws[a].s=sty.plain;}));
   const rng=XLSX.utils.decode_range(ws['!ref']||'A1');aoa.forEach((r,ri)=>{rng.e.r=Math.max(rng.e.r,ri);rng.e.c=Math.max(rng.e.c,r.length-1);});ws['!ref']=XLSX.utils.encode_range(rng);
   return ws;}
-const F=(f,v,s)=>({t:'n',f,v:r2(num(v)),z:NUMFMT,s});
-const N=(v,s)=>({t:'n',v:r2(num(v)),z:NUMFMT,s});
+const F=(f,v,s,z)=>({t:'n',f,v:r2(num(v)),z:z||ACC,s});
+const N=(v,s,z)=>({t:'n',v:r2(num(v)),z:z||ACC,s});
+const Nz=v=>num(v)?N(v):null;
 const Sx=(v,s)=>({t:'s',v:String(v),s});
 const COLS12=['C','D','E','F','G','H','I','J','K','L','M','N'];
+const TC_FIRST_COL=6; /* employees start in column G, as in the CET workbook */
+const TC_WHT_ROW={1:88,2:89,3:90,4:92,5:94,6:95,7:96,8:97,9:98,10:99,11:100,12:101};
+const tcSheetName=()=>'Tax calculation'+((P.y+543)%100);
 function regVals(x){const c=x.c,rw=x.r||{};return[c.sal,num(rw.ot),c.inc,num(rw.otherAdd),c.total,c.wht,c.sso,c.pf,c.loan,c.oded,c.ded,c.net];}
-function registerAoa(){
+function registerAoa(tcCols){
   const t=runTotals();const per=MON3[P.m-1]+P.y;
   const main=t.rows.filter(x=>x.e.bankTransfer!==false),dir=t.rows.filter(x=>x.e.bankTransfer===false);
-  const H=['No','Employee name','Remuneration ','Success fee/  Overtime','Incentive','Other addition','Total','Withholding Tax','Social Security Fund*','Providend fund','other (student loan)','Other','Total deduction','Net Pay','','Already paid','Net','','A/C','POSITION','DEPT','Note'];
+  const H=['No','Employee name','Remuneration ','Success fee/  Overtime','Incentive','Other addition','Total','Withholding Tax','Social Security Fund*','Providend fund','other (student loan)','Other','Total deduction','Net Pay','','Already paid','Net','','A/C','POSITION','DEPT'];
   const first=7,last=first+main.length-1,tot=last+1;
-  const sumOf=(rows)=>COLS12.map((_,i)=>r2(rows.reduce((s,x)=>s+regVals(x)[i],0)));
+  const sumOf=rows=>COLS12.map((_,i)=>r2(rows.reduce((s,x)=>s+regVals(x)[i],0)));
   const mt=sumOf(main),dtot=sumOf(dir);
   const prev=main.map(x=>prevMonthNet(x.e,P.y,P.m));
-  const pTot=r2(prev.reduce((s,v)=>s+(v||0),0)),qTot=r2(main.reduce((s,x,i)=>s+(prev[i]==null?0:x.c.net-prev[i]),0));
+  const pTot=r2(prev.reduce((s,v)=>s+(v||0),0)),qTot=r2(main.reduce((s,x,i)=>s+(prev[i]==null?x.c.net:x.c.net-prev[i]),0));
   const ssoX2=r2(mt[6]*2),remit=r2(ssoX2+mt[8]);
   const serial=(Date.UTC(P.y,P.m-1,1)-Date.UTC(1899,11,30))/86400000;
+  const tcn=tcSheetName(),lastCol=XLSX.utils.encode_col(Math.max(TC_FIRST_COL,TC_FIRST_COL+tcCols.length-1)),whtRow=TC_WHT_ROW[P.m];
+  const whtF=(x,r)=>{const i=tcCols.indexOf(x.e.code);if(i<0)return N(x.c.wht);
+    return x.e.bankTransfer===false?F(`+'${tcn}'!${XLSX.utils.encode_col(TC_FIRST_COL+i)}${whtRow}`,x.c.wht):F(`HLOOKUP(A${r},'${tcn}'!$A$11:$${lastCol}$102,${whtRow-10},FALSE)`,x.c.wht);};
   const aoa=[];
-  aoa.push([Sx(S.company.nameEN,sty.title)]);
-  aoa.push([Sx('Payroll report',sty.bold),null,null,null,null,null,null,null,null,null,null,F(`J4+J${tot}`,t.pfEr+mt[7])]);
-  aoa.push(['Period',{t:'n',v:serial,z:'mmm-yy'},null,null,null,null,null,null,F(`I${tot}*2`,ssoX2),Sx('Employer\nContribution',sty.bold)]);
-  aoa.push([null,null,null,null,null,null,null,null,null,N(t.pfEr,sty.bold),null,F(`I${tot}*2+K${tot}`,remit),null,F(`N${tot}+L4`,mt[11]+remit)]);
-  aoa.push(H.map(h=>h?Sx(h,sty.head):null));
+  aoa.push([Sx(S.company.nameEN,sty.bold)]);
+  aoa.push([Sx('Payroll report',sty.bold),null,null,null,null,null,null,null,null,null,null,F(`+J4+J${tot}`,t.pfEr+mt[7],sty.bold)]);
+  aoa.push([Sx('Period',sty.bold),{t:'n',v:serial,z:'mmmm yyyy',s:sty.plain},null,null,null,null,null,null,F(`+I${tot}*2`,ssoX2),Sx('Employer\nContribution')]);
+  aoa.push([null,null,null,null,null,null,null,null,null,N(t.pfEr),null,F(`+I${tot}*2+K${tot}`,remit),null,F(`+N${tot}+L4`,mt[11]+remit)]);
+  aoa.push(H.map(h=>h?Sx(h,sty.bold):null));
   aoa.push([]);
   main.forEach((x,i)=>{const r=first+i,v=regVals(x),pv=prev[i];
-    aoa.push([x.e.code,x.e.name,N(v[0]),N(v[1]),N(v[2]),N(v[3]),F(`SUM(C${r}:F${r})`,v[4]),N(v[5]),N(v[6]),N(v[7]),N(v[8]),N(v[9]),F(`SUM(H${r}:L${r})`,v[10]),F(`G${r}-M${r}`,v[11]),null,
-      pv==null?null:N(pv),pv==null?null:F(`N${r}-P${r}`,v[11]-pv),x.e.email||null,x.e.bankAcct||null,x.e.position||null,x.e.dept||null,x.e.startNote||null]);});
-  aoa.push([null,Sx('Total',sty.total),...COLS12.map((col,i)=>F(`SUM(${col}${first}:${col}${last})`,mt[i],sty.total)),null,F(`SUM(P${first}:P${last})`,pTot,sty.total),F(`SUM(Q${first}:Q${last})`,qTot,sty.total)]);
+    aoa.push([x.e.code,x.e.name,N(v[0]),Nz(v[1]),Nz(v[2]),Nz(v[3]),F(`SUM(C${r}:F${r})`,v[4]),whtF(x,r),N(v[6]),N(v[7]),N(v[8]),N(v[9]),F(`SUM(H${r}:L${r})`,v[10]),F(`+G${r}-M${r}`,v[11]),null,
+      pv==null?null:N(pv),F(`+N${r}-P${r}-O${r}`,pv==null?v[11]:v[11]-pv),x.e.email||null,x.e.bankAcct||null,x.e.position||null,x.e.dept||null,x.e.startNote||null,null,null,x.e.taxId?Sx(x.e.taxId):null,null,x.e.nationality||null]);});
+  aoa.push([null,null,...COLS12.map((col,i)=>F(`SUM(${col}${first}:${col}${tot-1})`,mt[i],sty.bold)),null,F(`SUM(P${first}:P${tot-1})`,pTot,sty.bold),F(`SUM(Q${first}:Q${tot-1})`,qTot,sty.bold)]);
   if(dir.length){
     aoa.push([]);const d0=aoa.length+1;
-    dir.forEach((x,i)=>{const r=d0+i,v=regVals(x);aoa.push([i+1,x.e.name,N(v[0]),N(v[1]),N(v[2]),N(v[3]),F(`SUM(C${r}:F${r})`,v[4]),N(v[5]),N(v[6]),N(v[7]),N(v[8]),N(v[9]),F(`SUM(H${r}:L${r})`,v[10]),F(`G${r}-M${r}`,v[11]),null,null,null,x.e.position||null,x.e.bankAcct||null,null,x.e.dept||null]);});
+    dir.forEach((x,i)=>{const r=d0+i,v=regVals(x);aoa.push([i+1,x.e.name,N(v[0]),Nz(v[1]),Nz(v[2]),Nz(v[3]),F(`SUM(C${r}:F${r})`,v[4]),whtF(x,r),Nz(v[6]),Nz(v[7]),Nz(v[8]),Nz(v[9]),F(`SUM(H${r}:L${r})`,v[10]),F(`+G${r}-M${r}`,v[11]),null,null,F(`+N${r}-P${r}`,v[11]),(x.e.position||'').toLowerCase()||null,digits(x.e.bankAcct)||null,null,x.e.dept||null]);});
     const d1=aoa.length;aoa.push([]);const dt=aoa.length+1;
-    aoa.push([null,null,...COLS12.map((col,i)=>F(`SUM(${col}${d0}:${col}${d1})`,dtot[i],sty.total))]);
+    aoa.push([null,null,...COLS12.map((col,i)=>F(`SUM(${col}${d0}:${col}${d1+1})`,dtot[i],sty.bold))]);
     aoa.push([]);
-    aoa.push([null,Sx('Total paid',sty.total),...COLS12.map((col,i)=>F(`${col}${tot}+${col}${dt}`,mt[i]+dtot[i],sty.total))]);
+    aoa.push([null,Sx('Total paid',sty.bold),...COLS12.map((col,i)=>F(`${col}${tot}+${col}${dt}`,mt[i]+dtot[i],sty.bold))]);
   }
-  return{aoa,name:per,widths:[9,30,13,13,11,11,13,12,11,11,10,9,12,13,2,13,12,30,16,26,22,24]};
+  return{aoa,name:per,widths:[9.5,23.1,17.9,15,16.1,14.1,17.1,15.5,14.1,14.5,15,12,17.1,18.5,18.5,17,16.5,32.5,19.1,26.5,25.5,18.5,6.5,22.1,17.9,45.8,12.5],rows:{4:29.5}};
 }
 function taxCalcAoa(){
-  const t=runTotals();const people=t.rows.map(x=>{const c=calcRow(x.e,x.r||{},P.y,P.m,true);return{e:x.e,c,d:c.detail};});
-  const nP=people.length,col=i=>XLSX.utils.encode_col(i+2);
-  const aoa=[[Sx('INCOME TAX CALCULATION '+(P.y+543),sty.title)],[],['','Company :',...people.map(p=>Sx(p.e.code,sty.head))],['','Name :',...people.map(p=>Sx(p.e.name,sty.bold))],['','Month :',P.m,'Year :',P.y],[]];
+  const t=runTotals();
+  const people=t.rows.map(x=>{const c=calcRow(x.e,x.r||{},P.y,P.m,true);return{e:x.e,c,d:c.detail};});
+  const nP=people.length,col=i=>XLSX.utils.encode_col(TC_FIRST_COL+i);
+  const rows=[];for(let i=0;i<130;i++)rows.push([]);
+  const put=(r,c,v)=>{const row=rows[r-1];while(row.length<c)row.push(null);row[c-1]=v;};  /* r and c are 1-based */
+  const putP=(r,i,v)=>put(r,TC_FIRST_COL+1+i,v);
+  const NF='#,##0_);(#,##0)';
+  /* income tax table, rows 1-10 */
+  put(1,2,Sx('INCOME TAX TABLE',sty.bold));
+  const TB=[[0,150000,0,0],[150000,150000,0.05,7500],[300000,200000,0.1,20000],[500000,250000,0.15,37500],[750000,250000,0.2,50000],[1000000,1000000,0.25,250000],[2000000,3000000,0.3,900000],[5000000,null,0.35,null]];
+  TB.forEach((b,i)=>{const r=2+i;put(r,2,N(b[0],null,NF));if(b[1]!=null)put(r,3,N(b[1],null,NF));put(r,4,{t:'n',v:b[2],z:'0%',s:sty.plain});if(b[3]!=null)put(r,5,F(`+C${r}*D${r}`,b[3],null,'#,##0'));});
+  put(10,6,Sx('Date of Birth'));
+  put(11,2,Sx('Company :',sty.bold));put(12,2,Sx('Name :',sty.bold));put(12,3,Sx(S.company.nameEN,sty.bold));
+  put(13,2,Sx('Month :',sty.bold));put(13,3,{t:'n',v:P.m,s:sty.bold});put(13,4,Sx('Year : ',sty.bold));put(13,5,{t:'n',v:P.y,s:sty.bold});put(13,6,Sx('Calculation'));
+  people.forEach((p,i)=>{putP(11,i,Sx(p.e.code));putP(12,i,Sx(p.e.name));
+    const sd=parseDateAny(String(p.e.startNote||'').replace(/^start\s*/i,''))||(p.e.startYM?{y:Number(p.e.startYM.slice(0,4)),m:Number(p.e.startYM.slice(5)),d:1}:null);
+    if(sd&&sd.y>1990)putP(13,i,{t:'n',v:(Date.UTC(sd.y,sd.m-1,sd.d)-Date.UTC(1899,11,30))/86400000,z:'dd-mm-yy',s:sty.plain});});
   const monthVal=(p,mm,k)=>{const d=p.d;if(!d)return 0;const mo=d.months[mm-1];
     if(k==='inc')return mo.inc;if(k==='oth')return mo.oth;
     if(k==='wht'){if(mm<P.m)return mo.wht;if(mm===P.m)return p.c.wht;const last=lastEmployedMonth(p.e,P.y);const lvl=d.level!=null?d.level:p.c.wht;
@@ -1550,37 +1582,67 @@ function taxCalcAoa(){
     const md=mm<P.m?monthData(p.e,P.y,mm):null;
     if(k==='ssf')return md?md.sso:(mm===P.m?p.c.sso:(isEmployed(p.e,P.y,mm)?ssoOf(p.e,p.e.salary):0));
     if(k==='pf')return md?md.pf:(mm===P.m?p.c.pf:(isEmployed(p.e,P.y,mm)?pfOf(p.e,p.e.salary):0));return 0;};
-  const totals={};
-  const block=(title,k)=>{const r0=aoa.length+2;aoa.push(['',Sx(title,sty.bold)]);const sums=people.map(()=>0);
-    for(let mm=1;mm<=12;mm++)aoa.push(['',THMONTH[mm-1]+' / '+MONTH_FULL[mm-1].replace(/^./,c=>c.toUpperCase()),...people.map((p,i)=>{const v=r2(monthVal(p,mm,k));sums[i]+=v;return N(v);})]);
-    const r1=aoa.length;aoa.push(['',Sx('Total',sty.total),...people.map((p,i)=>F(`SUM(${col(i)}${r0}:${col(i)}${r1})`,sums[i],sty.total))]);totals[k]={row:aoa.length,v:sums};};
-  block('Monthly Incomes :','inc');block('Monthly Other Incomes :','oth');
-  const A0=aoa.length+2;aoa.push(['',Sx('Allowances :',sty.bold)]);const asum=people.map(()=>0);
-  const AL=[['Self','self'],['Spouse','spouse'],['Non-schooling children','childNS'],['Schooling children','childS'],['Parent','parent'],['Life insurance premium','lifeIns'],['Provident fund','_pf'],['RMF / LTF','rmfLtf'],['SSF / ThaiESG','ssfEsg'],['Special','special'],['Interest on housing loans','housing'],['Social security','_sso'],['Donation','donation']];
-  for(const[l,k]of AL)aoa.push(['',l,...people.map((p,i)=>{const A=p.e.allowances||{};const d=p.d||{};
-    const v=r2(k==='_pf'?num(d.annPF):k==='_sso'?Math.min(num(d.annSSO),S.settings.ssoCeil*12*S.settings.ssoRate/100):k==='lifeIns'||k==='housing'?Math.min(num(A[k]),100000):k==='self'?(num(A.self)||60000):num(A[k]));
-    if(k!=='donation')asum[i]+=v;return N(v);})]);
-  const A1=aoa.length-1;aoa.push(['',Sx('Total allowances (before donation)',sty.total),...people.map((p,i)=>F(`SUM(${col(i)}${A0}:${col(i)}${A1})`,asum[i],sty.total))]);const rAl=aoa.length;
-  block('Monthly SSF :','ssf');block('Monthly provident fund :','pf');block('Monthly Withholding Tax :','wht');
-  aoa.push([]);
-  const line=(lbl,fn,vals,s)=>{aoa.push(['',Sx(lbl,s||sty.bold),...people.map((p,i)=>fn?F(fn(col(i)),vals[i]):N(vals[i]))]);return aoa.length;};
-  const inc=totals.inc.v,oth=totals.oth.v,gross=people.map((p,i)=>r2(inc[i]+oth[i])),exp=gross.map(g=>-Math.min(g*0.5,100000));
-  const rS=line('Salary',c=>`${c}${totals.inc.row}`,inc);const rO=line('Other income',c=>`${c}${totals.oth.row}`,oth);
-  const rT=line('Total income',c=>`${c}${rS}+${c}${rO}`,gross);
-  const rE=line('Personal expenses',c=>`-MIN(${c}${rT}*50%,100000)`,exp);
-  const rA=line('Total allowance',c=>`-${c}${rAl}`,asum.map(v=>-v));
-  line('Net income before donation',c=>`MAX(0,${c}${rT}+${c}${rE}+${c}${rA})`,gross.map((g,i)=>Math.max(0,g+exp[i]-asum[i])));
-  line('Net taxable income (after donation)',null,people.map(p=>p.d?p.d.taxableAll:0));
-  const rX=line('Tax for the year',null,people.map(p=>p.d?p.d.taxAll:0));
-  line('Remain (tax − withheld)',c=>`${c}${rX}-${c}${totals.wht.row}`,people.map((p,i)=>r2((p.d?p.d.taxAll:0)-totals.wht.v[i])),sty.total);
-  return{aoa,name:'Tax calculation'+((P.y+543)%100),widths:[2,34,...people.map(()=>14)]};
+  const MN=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const sums={};
+  const BONUS_ROW={oth:{4:32,5:34},wht:{4:91,5:93}};
+  const bonusOf=(p,mm,k)=>{const H=p.e.history2026||{};const o=H[k==='oth'?'otherB':'whtB']||{};return mm<P.m&&P.y===S.historyYear?num(o[mm]!=null?o[mm]:o[String(mm)]):0;};
+  const monthBlock=(k,titleRow,title,rowOf,labels,totalRow)=>{
+    put(titleRow,2,Sx(title,sty.bold));const s=people.map(()=>0);
+    for(const[r,l]of labels)put(r,3,Sx(l));
+    people.forEach((p,i)=>{for(let mm=1;mm<=12;mm++){const v=r2(monthVal(p,mm,k));s[i]+=v;
+      const br=BONUS_ROW[k]&&BONUS_ROW[k][mm];const b=br?r2(bonusOf(p,mm,k)):0;
+      if(b){putP(br,i,N(b));if(r2(v-b))putP(rowOf(mm),i,N(r2(v-b)));}else if(v)putP(rowOf(mm),i,N(v));}});
+    put(totalRow,2,Sx('Total'));people.forEach((p,i)=>putP(totalRow,i,F(`SUM(${col(i)}${titleRow+1}:${col(i)}${totalRow-1})`,s[i])));
+    sums[k]={row:totalRow,v:s.map(r2)};};
+  monthBlock('inc',14,'Monthly Incomes:',mm=>14+mm,MN.map((l,i)=>[15+i,l]),27);
+  const OTH_ROW={1:29,2:30,3:31,4:33,5:35,6:36,7:37,8:38,9:39,10:40,11:41,12:42};
+  monthBlock('oth',28,'Monthly Other Incomes :',mm=>OTH_ROW[mm],[[29,'January'],[30,'February'],[31,'March'],[32,'April -BONUS'],[33,'April'],[34,'May-BONUS'],[35,'May'],[36,'June'],[37,'July'],[38,'August'],[39,'September'],[40,'October'],[41,'November'],[42,'December']],43);
+  put(29,4,Sx('Bonus/OT'));
+  /* allowances, rows 44-58 */
+  put(44,2,Sx('Allowances :',sty.bold));
+  const AL=[[45,'Self','self'],[46,'Spouse','spouse'],[47,'Non-schooling children (@ 7,500 or @ 15,000)','childNS'],[48,'Schooling children (@ 30,000)','childS'],[49,'Parent','parent'],
+    [50,'Life insurance premium (not exceed 100,000)','lifeIns'],[51,'Provident fund (not exceed 10,000)','_pf'],[52,'กองทุน RMF / LTF','rmfLtf'],[53,'SSF/ESG','ssfEsg'],[54,'Special','special'],
+    [55,'Interest on housing loans','housing'],[56,'Social security','_sso'],[57,'Donation','donation']];
+  const asum=people.map(()=>0);
+  for(const[r,l,k]of AL){put(r,2,Sx(l));people.forEach((p,i)=>{const A=p.e.allowances||{};const d=p.d||{};let v;
+    if(k==='_pf'){v=num(d.annPF);asum[i]+=v;putP(r,i,F(`+${col(i)}86`,v));return;}
+    if(k==='_sso'){v=Math.min(num(d.annSSO),S.settings.ssoCeil*12*S.settings.ssoRate/100);asum[i]+=v;putP(r,i,F(`${col(i)}72`,v));return;}
+    v=k==='donation'?num(d.donate):k==='self'?(num(A.self)||60000):num(A[k]);
+    asum[i]+=v;if(v)putP(r,i,N(v));});}
+  put(58,2,Sx('Total allowances'));put(58,6,Sx(' (10) + ....... + (18)'));people.forEach((p,i)=>putP(58,i,F(`SUM(${col(i)}45:${col(i)}57)`,asum[i])));
+  monthBlock('ssf',59,'Monthly SSF Fund :',mm=>59+mm,MN.map((l,i)=>[60+i,l]),72);
+  monthBlock('pf',73,'Monthly providend fund :',mm=>73+mm,MN.map((l,i)=>[74+i,l]),86);
+  monthBlock('wht',87,'Monthly Withholding Tax :',mm=>TC_WHT_ROW[mm],[[88,'January'],[89,'February'],[90,'March'],[91,'April-bonus'],[92,'April'],[93,'May-BONUS'],[94,'May'],[95,'June'],[96,'July'],[97,'August'],[98,'September'],[99,'October'],[100,'November'],[101,'December']],102);
+  /* annual calculation, rows 104-125, formulas as in the CET workbook */
+  const gross=people.map((p,i)=>r2(sums.inc.v[i]+sums.oth.v[i])),exp=gross.map(g=>-(g>200000?100000:g*0.5)),net=gross.map((g,i)=>r2(g+exp[i]-asum[i]));
+  put(104,4,Sx('Salary'));put(105,4,Sx('Other income'));put(107,4,Sx('Personal expenses'));put(108,4,Sx('Total allowance'));put(109,4,Sx('Net taxable income'));put(111,4,Sx('Tax calculation'));
+  people.forEach((p,i)=>{const c=col(i);
+    putP(104,i,F(`${c}27`,sums.inc.v[i]));putP(105,i,F(`${c}43`,sums.oth.v[i]));putP(106,i,F(`SUM(${c}104:${c}105)`,gross[i]));
+    putP(107,i,F(`-IF(${c}106>200000,100000,${c}106*50%)`,exp[i]));putP(108,i,F(`-${c}58`,-asum[i]));putP(109,i,F(`SUM(${c}106:${c}108)`,net[i]));});
+  const BR=[[112,150000,150000,0],[113,300000,150000,0.05],[114,500000,200000,0.1],[115,750000,250000,0.15],[116,1000000,250000,0.2],[117,2000000,1000000,0.25],[118,5000000,3000000,0.3],[119,10000000,null,0.35]];
+  for(const[r,upper,width,rate]of BR){
+    put(r,2,r===112?F('C112',upper):r===113?F('C113+C112',upper):r<118?F(`+B${r-1}+C${r}`,upper):N(upper));
+    if(width!=null)put(r,3,r===118?F('+B118-B117',width):N(width));put(r,4,{t:'n',v:rate,z:'0%',s:sty.plain});if(width!=null)put(r,6,F(`C${r}*D${r}`,width*rate));}
+  const slice=(x,lo,hi,rate)=>Math.max(0,Math.min(x,hi)-lo)*rate;
+  people.forEach((p,i)=>{const c=col(i),x=net[i];
+    putP(112,i,F(`IF(${c}$109>$B$112,0,0)`,0));
+    let tax=0;for(const[r,upper,width,rate]of BR.slice(1,7)){const lo=upper-width;const v=x>upper?width*rate:slice(x,lo,upper,rate);tax+=v;
+      putP(r,i,F(`IF(${c}$109>$B$${r},$F$${r},(${c}$109-$B$${r-1})*$D$${r}*IF(${c}$109<$B$${r-1},0,1))`,v));}
+    const top=Math.max(0,x-5000000)*0.35;tax+=top;putP(119,i,F(`IF(${c}$109>$B$118,(${c}$109-$B$118)*$D$119,0)`,top));
+    putP(121,i,F(`ROUND(SUM(${c}112:${c}120),2)`,r2(tax)));
+    putP(122,i,F(`${c}102-${c}121`,r2(sums.wht.v[i]-r2(tax))));
+    putP(124,i,F(`+${c}121/12`,r2(tax)/12));});
+  put(122,6,Sx('Remain'));
+  return{aoa:rows,name:tcSheetName(),widths:[4.9,11.5,11.5,4.5,9,11.5,...people.map(()=>14)],rows:{}};
 }
 function exportRegisterXlsx(){
-  const reg=registerAoa(),tc=taxCalcAoa();
+  const tc=taxCalcAoa();const codes=runTotals().rows.map(x=>x.e.code);const reg=registerAoa(codes);
   const wb=XLSX.utils.book_new();
-  for(const s of[reg,tc]){const ws=cellsFrom(s.aoa);ws['!cols']=s.widths.map(w=>({wch:w}));XLSX.utils.book_append_sheet(wb,ws,s.name);}
+  for(const s of[reg,tc]){const ws=cellsFrom(s.aoa);ws['!cols']=s.widths.map(w=>({wch:w}));
+    ws['!rows']=[];for(const[r,h]of Object.entries(s.rows||{}))ws['!rows'][Number(r)]={hpt:h};
+    XLSX.utils.book_append_sheet(wb,ws,s.name);}
   const mm=String(P.m).padStart(2,'0'),mon=MON3[P.m-1].charAt(0)+MON3[P.m-1].slice(1).toLowerCase();
-  saveFile(`${mm}. Payroll_${mon}${P.y}_CET (app).xlsx`,XLSX.write(wb,{type:'array',bookType:'xlsx'}));
+  saveFile(`${mm}. Payroll_${mon}${P.y}_CET.xlsx`,XLSX.write(wb,{type:'array',bookType:'xlsx'}));
 }
 /* ---------- one import page: drop any file, the app works out what it is ---------- */
 const IMP={files:[],register:null};
