@@ -110,6 +110,16 @@ input[type=file]{display:none}
 .chip.b{background:var(--blue-soft);color:var(--blue)}
 .note{background:var(--blue-soft);border:1px solid var(--line);border-radius:9px;padding:10px 13px;font-size:12.5px;margin-bottom:14px}
 .note.warn{background:var(--amber-soft)}
+/* server mode */
+#userchip{display:flex;gap:6px;align-items:center}
+.dlglogin{max-width:min(380px,92vw);width:380px}
+.login{display:flex;flex-direction:column;gap:12px;padding:22px}
+.login .brand{display:flex;gap:10px;align-items:center;margin-bottom:4px}
+.login .brand .logo{width:36px;height:36px;border-radius:9px;background:var(--accent);color:var(--accent-fg);display:flex;align-items:center;justify-content:center;font-weight:700}
+.login .brand small{display:block;color:var(--muted);font-size:12px}
+.login label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--muted)}
+.login input{font-size:15px;padding:8px 10px}
+.lgmsg{min-height:18px;font-size:12.5px;color:var(--red)}
 /* import page */
 .stepper{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:4px 0 16px}
 .stp{display:flex;gap:9px;align-items:flex-start;text-align:left;border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:10px;padding:10px;cursor:pointer;font:inherit;min-width:0}
@@ -201,6 +211,7 @@ dialog .dft{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:
         <span class="plabel num" id="plabel"></span>
         <button id="pnext" title="เดือนถัดไป">›</button>
       </div>
+      <span id="userchip"></span>
       <span id="savestat"></span>
     </div>
     <div id="content"><div class="page" id="view"></div></div>
@@ -210,6 +221,8 @@ dialog .dft{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:
 <div id="dropOverlay" hidden><div>วางไฟล์เพื่อนำเข้า</div></div>
 <dialog id="dlgEmp"></dialog>
 <dialog id="dlgBrk"></dialog>
+<dialog id="dlgLogin" class="dlglogin"></dialog>
+<dialog id="dlgConflict"></dialog>
 
 <script>
 'use strict';
@@ -256,8 +269,9 @@ function migrate(){
 }
 migrate();
 let saveTimer=null;
-function save(){try{localStorage.setItem(LSKEY,JSON.stringify(S));setStat('บันทึกแล้ว ✓');}catch(e){setStat('⚠ บันทึกไม่สำเร็จ (พื้นที่เบราว์เซอร์)');}}
-function queueSave(){setStat('กำลังบันทึก…');clearTimeout(saveTimer);saveTimer=setTimeout(save,400);}
+const SRV={on:false,user:null,version:0,inflight:false,dirty:false,pending:false,poll:null,health:null,note:null};
+function save(){if(SRV.on){srvSave();return;}try{localStorage.setItem(LSKEY,JSON.stringify(S));setStat('บันทึกแล้ว ✓');}catch(e){setStat('⚠ บันทึกไม่สำเร็จ (พื้นที่เบราว์เซอร์)');}}
+function queueSave(){SRV.pending=true;setStat('กำลังบันทึก…');clearTimeout(saveTimer);saveTimer=setTimeout(()=>{SRV.pending=false;save();},SRV.on?800:400);}
 function setStat(t){document.getElementById('savestat').textContent=t;}
 
 /* period */
@@ -1015,14 +1029,16 @@ function vSet(el){
   </div></div>
   <div class="panel"><div class="hd"><h3>ผังบัญชีสำหรับ PEAK</h3></div><div class="bd"><div class="acct-grid">${acRows}</div></div></div>
   <div class="panel"><div class="hd"><h3>ข้อมูลและการสำรอง</h3></div><div class="bd">
-    <p class="sub">ข้อมูลทั้งหมด (พนักงาน งวดเงินเดือน การตั้งค่า) เก็บในเบราว์เซอร์เครื่องนี้เท่านั้น ไม่ได้ส่งขึ้นเซิร์ฟเวอร์ — สำรองเป็นไฟล์ไว้สม่ำเสมอ</p>
+    <p class="sub">${SRV.on?`ข้อมูลเก็บบนเซิร์ฟเวอร์แบบเข้ารหัส ทุกคนที่เข้าสู่ระบบใช้ชุดเดียวกัน · เวอร์ชัน ${SRV.version}${SRV.updatedBy?' · บันทึกล่าสุดโดย '+esc(SRV.updatedBy)+' '+esc(fmtWhen(SRV.updatedAt)):''}${SRV.health&&SRV.health.db!=='postgresql'?' · ⚠ ยังไม่ได้ต่อฐานข้อมูล Postgres ข้อมูลจะหายเมื่อ deploy ใหม่':''}${SRV.health&&!SRV.health.encrypted?' · ⚠ ยังไม่ได้ตั้ง DATA_KEY':''}`:'ข้อมูลทั้งหมด (พนักงาน งวดเงินเดือน การตั้งค่า) เก็บในเบราว์เซอร์เครื่องนี้เท่านั้น ไม่ได้ส่งขึ้นเซิร์ฟเวอร์ — สำรองเป็นไฟล์ไว้สม่ำเสมอ'}</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn pri" onclick="backupAll()">สำรองข้อมูลทั้งหมด (.json)</button>
       <button class="btn" onclick="document.getElementById('fileRestore').click()">กู้คืนจากไฟล์สำรอง</button>
       <button class="btn" onclick="go('mpa')">นำเข้าไฟล์ข้อมูล</button>
-      <button class="btn warn" onclick="wipeAll()">ล้างข้อมูลทั้งหมด</button>
+      ${!SRV.on||(SRV.user&&SRV.user.role==='admin')?'<button class="btn warn" onclick="wipeAll()">ล้างข้อมูลทั้งหมด</button>':''}
     </div>
-  </div></div>`;
+  </div></div>
+  <div id="srvPanels"></div>`;
+  srvPanels();
   el.querySelectorAll('[data-c]').forEach(i=>i.addEventListener('change',()=>{S.company[i.dataset.c]=i.value.trim();queueSave();}));
   el.querySelectorAll('[data-s]').forEach(i=>i.addEventListener('change',()=>{const k=i.dataset.s;
     S.settings[k]=(k==='whtMethod'||k==='whtRound')?i.value:num(i.value);queueSave();}));
@@ -1031,7 +1047,7 @@ function vSet(el){
 window.backupAll=function(){saveFile('cet-payroll-backup-'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(S,null,1));};
 let wipeArm=false;
 window.wipeAll=function(){if(!wipeArm){wipeArm=true;toast('กดอีกครั้งเพื่อยืนยันการล้างข้อมูลทั้งหมด');setTimeout(()=>wipeArm=false,4000);return;}
-  S=defaultState();try{localStorage.removeItem(LSKEY);}catch(e){}render();toast('ล้างข้อมูลแล้ว');};
+  S=defaultState();if(SRV.on)queueSave();else{try{localStorage.removeItem(LSKEY);}catch(e){}}render();toast('ล้างข้อมูลแล้ว');};
 
 /* ---------- MPA (monthly payroll advice) + supporting documents ---------- */
 const MONTHS_EN=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
@@ -2000,12 +2016,154 @@ function wireFiles(){
   document.addEventListener('drop',ev=>{if(!hasFiles(ev))return;ev.preventDefault();depth=0;ov.hidden=true;handleFiles(ev.dataTransfer.files);});
 }
 
+/* ---------- shared server mode (Render): login, one shared encrypted state, version checks ---------- */
+const ROLE_TH={admin:'ผู้ดูแลระบบ',editor:'ผู้แก้ไข',viewer:'ดูอย่างเดียว'};
+async function api(path,opts={}){
+  const o={credentials:'same-origin',headers:{},method:opts.method||'GET'};
+  if(opts.body!==undefined){o.body=JSON.stringify(opts.body);o.headers['Content-Type']='application/json';}
+  if(o.method!=='GET')o.headers['X-CET']='1';
+  let r;try{r=await fetch(path,o);}catch(e){return{status:0,ok:false,data:{detail:'ติดต่อเซิร์ฟเวอร์ไม่ได้'}};}
+  let j=null;try{j=await r.json();}catch(e){}
+  return{status:r.status,ok:r.ok,data:j||{}};
+}
+const fmtWhen=s=>{if(!s)return '';const d=new Date(s);return isNaN(d)?'':d.toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short'});};
+async function srvBoot(){
+  let h;try{const r=await fetch('/api/health',{cache:'no-store'});if(!r.ok)return;h=await r.json();}catch(e){return;}
+  if(!h||h.app!=='cet-payroll')return;
+  SRV.on=true;SRV.health=h;S=defaultState();render();setStat('');
+  const ft=document.querySelector('#side .foot');if(ft)ft.textContent='ข้อมูลเก็บบนเซิร์ฟเวอร์แบบเข้ารหัส ใช้ร่วมกันทุกคนที่เข้าสู่ระบบ';
+  const me=await api('/api/me');
+  if(me.ok)await srvOnLogin(me.data.user);else srvShowLogin();
+}
+function srvShowLogin(msg){
+  const dlg=document.getElementById('dlgLogin');const noUsers=SRV.health&&!SRV.health.has_users;
+  dlg.innerHTML=`<form id="loginForm" class="login">
+    <div class="brand"><div class="logo">CE</div><div><b>CET Payroll</b><small>เข้าสู่ระบบเพื่อใช้ข้อมูลเงินเดือนร่วมกัน</small></div></div>
+    ${noUsers?'<div class="note warn">ยังไม่มีผู้ดูแลระบบ — ตั้งค่า ADMIN_USERNAME และ ADMIN_PASSWORD ใน Render → Environment แล้ว deploy ใหม่</div>':''}
+    <label>ชื่อผู้ใช้<input id="lgUser" autocomplete="username" autocapitalize="none" required></label>
+    <label>รหัสผ่าน<input id="lgPass" type="password" autocomplete="current-password" required></label>
+    <div id="lgMsg" class="lgmsg" role="alert">${esc(msg||'')}</div>
+    <button class="btn pri" type="submit">เข้าสู่ระบบ</button>
+  </form>`;
+  dlg.addEventListener('cancel',ev=>ev.preventDefault(),{once:false});
+  if(!dlg.open)dlg.showModal();
+  document.getElementById('lgUser').focus();
+  document.getElementById('loginForm').addEventListener('submit',async ev=>{
+    ev.preventDefault();const m=document.getElementById('lgMsg');m.textContent='กำลังตรวจสอบ…';
+    const r=await api('/api/login',{method:'POST',body:{username:document.getElementById('lgUser').value,password:document.getElementById('lgPass').value}});
+    if(r.ok){dlg.close();await srvOnLogin(r.data.user);}
+    else m.textContent=r.status===429?'ใส่รหัสผิดหลายครั้ง — ลองใหม่ในอีก 15 นาที':r.status===401?'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง':(r.data.detail||'เข้าสู่ระบบไม่สำเร็จ');
+  });
+}
+async function srvOnLogin(user){
+  SRV.user=user;renderUserChip();await srvLoad();
+  clearInterval(SRV.poll);SRV.poll=setInterval(srvPoll,20000);
+}
+function renderUserChip(){
+  const el=document.getElementById('userchip');if(!el)return;
+  if(!SRV.on||!SRV.user){el.innerHTML='';return;}
+  el.innerHTML=`<span class="chip ${SRV.user.role==='viewer'?'a':'g'}" title="${esc(SRV.user.username)}">${esc(SRV.user.name||SRV.user.username)} · ${ROLE_TH[SRV.user.role]}</span>
+    <button class="btn sm" onclick="srvLogout()">ออกจากระบบ</button>`;
+}
+window.srvLogout=async function(){await api('/api/logout',{method:'POST'});location.reload();};
+function loadInto(p){
+  S=Object.assign(defaultState(),p);S.settings=Object.assign(defaultState().settings,p.settings||{});
+  S.settings.accounts=Object.assign(defaultState().settings.accounts,(p.settings||{}).accounts||{});
+  S.company=Object.assign(defaultState().company,p.company||{});migrate();
+}
+async function srvLoad(quiet){
+  const r=await api('/api/state');
+  if(r.status===401){srvShowLogin('หมดเวลาเข้าสู่ระบบ — เข้าสู่ระบบใหม่');return;}
+  if(!r.ok){toast(r.data.detail||'โหลดข้อมูลไม่สำเร็จ');return;}
+  SRV.version=r.data.version;SRV.updatedBy=r.data.updated_by;SRV.updatedAt=r.data.updated_at;
+  if(r.data.data)loadInto(r.data.data);else S=defaultState();
+  render();
+  setStat(SRV.version?`เวอร์ชัน ${SRV.version} · ${SRV.updatedBy||''} ${fmtWhen(SRV.updatedAt)}`:'ยังไม่มีข้อมูล — เริ่มที่หน้า นำเข้าข้อมูล');
+  if(!quiet&&SRV.user.role==='viewer')toast('สิทธิ์ดูอย่างเดียว — การแก้ไขจะไม่ถูกบันทึก');
+}
+async function srvSave(){
+  if(!SRV.user)return;
+  if(SRV.user.role==='viewer'){setStat('ดูอย่างเดียว — ไม่ได้บันทึก');return;}
+  if(SRV.inflight){SRV.dirty=true;return;}
+  SRV.inflight=true;SRV.dirty=false;setStat('กำลังบันทึกขึ้นเซิร์ฟเวอร์…');
+  const r=await api('/api/state',{method:'PUT',body:{base_version:SRV.version,data:S,note:SRV.note||'save'}});
+  SRV.note=null;SRV.inflight=false;
+  if(r.ok){SRV.version=r.data.version;SRV.updatedBy=SRV.user.username;SRV.updatedAt=new Date().toISOString();
+    setStat(`บันทึกแล้ว ✓ เวอร์ชัน ${SRV.version}`);if(SRV.dirty)srvSave();}
+  else if(r.status===409)srvConflict(r.data);
+  else if(r.status===401)srvShowLogin('หมดเวลาเข้าสู่ระบบ — เข้าสู่ระบบใหม่ แล้วบันทึกอีกครั้ง');
+  else setStat('⚠ บันทึกไม่สำเร็จ — '+(r.data.detail||r.status));
+}
+function srvConflict(info){
+  setStat('⚠ ยังไม่ได้บันทึก — มีคนอื่นบันทึกก่อน');
+  const dlg=document.getElementById('dlgConflict');
+  dlg.innerHTML=`<div class="dhd"><h3>มีการบันทึกใหม่ระหว่างที่คุณแก้ไข</h3></div>
+  <div class="dbd"><p><b>${esc(info.updated_by||'ผู้ใช้อื่น')}</b> บันทึกเวอร์ชัน ${info.version} เมื่อ ${esc(fmtWhen(info.updated_at))} การแก้ไขล่าสุดของคุณยังไม่ได้บันทึก</p>
+  <p class="sub">โหลดข้อมูลล่าสุด = เห็นงานของ ${esc(info.updated_by||'อีกคน')} แต่การแก้ไขของคุณที่ยังไม่บันทึกจะหาย · บันทึกทับ = ใช้ข้อมูลบนจอของคุณแทนเวอร์ชันของอีกคน (ระบบบันทึกประวัติไว้)</p></div>
+  <div class="dft"><button class="btn" id="cfOver">บันทึกทับด้วยข้อมูลของฉัน</button><button class="btn pri" id="cfLoad">โหลดข้อมูลล่าสุด</button></div>`;
+  dlg.showModal();
+  document.getElementById('cfLoad').onclick=async()=>{dlg.close();await srvLoad(true);toast('โหลดข้อมูลล่าสุดแล้ว');};
+  document.getElementById('cfOver').onclick=async()=>{dlg.close();SRV.version=info.version;SRV.note='overwrite';await srvSave();};
+}
+async function srvPoll(){
+  if(!SRV.user||SRV.inflight||SRV.pending||document.hidden)return;
+  if(document.querySelector('dialog[open]'))return;
+  const r=await api('/api/state/version');
+  if(r.status===401){clearInterval(SRV.poll);srvShowLogin('หมดเวลาเข้าสู่ระบบ — เข้าสู่ระบบใหม่');return;}
+  if(r.ok&&r.data.version>SRV.version&&!SRV.pending&&!SRV.inflight){await srvLoad(true);toast(`อัปเดตข้อมูลล่าสุดจาก ${r.data.updated_by||'ผู้ใช้อื่น'}`);}
+}
+/* settings panels: my account, users, history */
+async function srvPanels(){
+  const box=document.getElementById('srvPanels');if(!box||!SRV.on||!SRV.user)return;
+  const U=SRV.user;const h=SRV.health||{};
+  let html=`<div class="panel"><div class="hd"><h3>บัญชีของฉัน</h3></div><div class="bd">
+    <p class="sub">${esc(U.name)} (${esc(U.username)}) · สิทธิ์ ${ROLE_TH[U.role]}</p>
+    <form id="pwForm" class="fgrid"><label>รหัสผ่านปัจจุบัน<input type="password" id="pwOld" autocomplete="current-password" required></label>
+      <label>รหัสผ่านใหม่ (อย่างน้อย 10 ตัว)<input type="password" id="pwNew" autocomplete="new-password" minlength="10" required></label>
+      <div style="align-self:end"><button class="btn" type="submit">เปลี่ยนรหัสผ่าน</button></div></form></div></div>`;
+  if(U.role==='admin'){
+    const [us,au]=await Promise.all([api('/api/users'),api('/api/audit?limit=40')]);
+    const rows=(us.data.users||[]).map(u=>`<tr><td class="num">${esc(u.username)}</td><td>${esc(u.name)}</td>
+      <td><select data-urole="${u.id}">${Object.entries(ROLE_TH).map(([k,v])=>`<option value="${k}" ${k===u.role?'selected':''}>${v}</option>`).join('')}</select></td>
+      <td><input type="checkbox" data-uact="${u.id}" ${u.active?'checked':''} aria-label="ใช้งานได้"></td><td>${esc(fmtWhen(u.last_login))||'—'}</td>
+      <td><input type="password" data-upw="${u.id}" placeholder="รหัสใหม่" autocomplete="new-password" style="width:130px"> <button class="btn sm" data-upwb="${u.id}">ตั้งรหัส</button></td></tr>`).join('');
+    const ACT={save:'บันทึก',overwrite:'บันทึกทับ',restore:'กู้คืน',password:'เปลี่ยนรหัสผ่าน',user_create:'เพิ่มผู้ใช้',user_edit:'แก้ผู้ใช้',bootstrap_admin:'สร้างผู้ดูแลแรก'};
+    const arows=(au.data.audit||[]).map(a=>`<tr><td>${esc(fmtWhen(a.at))}</td><td>${esc(a.username)}</td><td>${esc(ACT[a.action]||a.action)}</td><td class="num">${a.version||''}</td><td class="name-cell" style="max-width:320px">${esc(a.detail||'')}</td></tr>`).join('');
+    html+=`<div class="panel"><div class="hd"><h3>ผู้ใช้งาน</h3></div>
+      <div class="tblwrap"><table><thead><tr><th>ชื่อผู้ใช้</th><th>ชื่อ</th><th>สิทธิ์</th><th>ใช้งาน</th><th>เข้าล่าสุด</th><th>รีเซ็ตรหัสผ่าน</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="bd"><form id="addUser" class="fgrid">
+        <label>ชื่อผู้ใช้ (a-z 0-9 . _ -)<input id="nuUser" autocomplete="off" required pattern="[a-zA-Z0-9._\\-]{3,40}"></label>
+        <label>ชื่อที่แสดง<input id="nuName"></label>
+        <label>สิทธิ์<select id="nuRole"><option value="editor">ผู้แก้ไข</option><option value="viewer">ดูอย่างเดียว</option><option value="admin">ผู้ดูแลระบบ</option></select></label>
+        <label>รหัสผ่านเริ่มต้น (อย่างน้อย 10 ตัว)<input id="nuPass" type="password" autocomplete="new-password" minlength="10" required></label>
+        <div style="align-self:end"><button class="btn pri" type="submit">+ เพิ่มผู้ใช้</button></div></form>
+      <p class="sub">ผู้ดูแลระบบ: จัดการผู้ใช้และดูประวัติ · ผู้แก้ไข: นำเข้า คำนวณ ปิดงวด ส่งออก · ดูอย่างเดียว: เปิดดูและส่งออกไฟล์ได้ แต่บันทึกไม่ได้</p></div></div>
+    <div class="panel"><div class="hd"><h3>ประวัติการบันทึก (40 รายการล่าสุด)</h3></div>
+      <div class="tblwrap" style="max-height:40vh;overflow-y:auto"><table><thead><tr><th>เวลา</th><th>ผู้ใช้</th><th>การกระทำ</th><th class="r">เวอร์ชัน</th><th>รายละเอียด</th></tr></thead><tbody>${arows}</tbody></table></div></div>`;
+  }
+  box.innerHTML=html;
+  document.getElementById('pwForm').addEventListener('submit',async ev=>{ev.preventDefault();
+    const r=await api('/api/me/password',{method:'POST',body:{old:document.getElementById('pwOld').value,new:document.getElementById('pwNew').value}});
+    if(r.ok){toast('เปลี่ยนรหัสผ่านแล้ว — เข้าสู่ระบบใหม่');SRV.user=null;srvShowLogin('เปลี่ยนรหัสผ่านแล้ว — เข้าสู่ระบบด้วยรหัสใหม่');}
+    else toast(r.data.detail==='current password is wrong'?'รหัสผ่านปัจจุบันไม่ถูกต้อง':r.data.detail||'เปลี่ยนรหัสผ่านไม่สำเร็จ');});
+  if(U.role!=='admin')return;
+  const done=r=>{if(r.ok){toast('บันทึกแล้ว');srvPanels();}else{toast(r.data.detail||'ไม่สำเร็จ');srvPanels();}};
+  box.querySelectorAll('[data-urole]').forEach(x=>x.addEventListener('change',async()=>done(await api('/api/users/'+x.dataset.urole,{method:'PATCH',body:{role:x.value}}))));
+  box.querySelectorAll('[data-uact]').forEach(x=>x.addEventListener('change',async()=>done(await api('/api/users/'+x.dataset.uact,{method:'PATCH',body:{active:x.checked}}))));
+  box.querySelectorAll('[data-upwb]').forEach(x=>x.addEventListener('click',async()=>{const i=box.querySelector(`[data-upw="${x.dataset.upwb}"]`);
+    done(await api('/api/users/'+x.dataset.upwb,{method:'PATCH',body:{password:i.value}}));}));
+  document.getElementById('addUser').addEventListener('submit',async ev=>{ev.preventDefault();
+    done(await api('/api/users',{method:'POST',body:{username:document.getElementById('nuUser').value,name:document.getElementById('nuName').value,
+      role:document.getElementById('nuRole').value,password:document.getElementById('nuPass').value}}));});
+}
+
 /* ---------- boot ---------- */
 document.querySelectorAll('.navbtn').forEach(b=>b.addEventListener('click',()=>go(b.dataset.v)));
 document.getElementById('pprev').addEventListener('click',()=>shiftP(-1));
 document.getElementById('pnext').addEventListener('click',()=>shiftP(1));
 wireFiles();
 plabel();render();setStat(S.employees.length?'พร้อมใช้งาน':'');
+srvBoot();
 </script>
 
 </body></html>

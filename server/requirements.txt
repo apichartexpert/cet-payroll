@@ -1,0 +1,6 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+SQLAlchemy>=2.0
+cryptography>=42
+# Postgres driver for Neon (SQLAlchemy 2.x uses psycopg v3 for postgresql+psycopg://)
+psycopg[binary]>=3.1

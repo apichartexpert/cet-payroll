@@ -14,3 +14,11 @@
 desktop.ini
 .DS_Store
 Thumbs.db
+*.db
+*.sqlite
+data/
+__pycache__/
+.pytest_cache/
+.env
+# the server's dependency list is the one .txt file that belongs in the repo
+!server/requirements.txt

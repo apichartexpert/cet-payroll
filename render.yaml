@@ -1,0 +1,28 @@
+# Render Blueprint: Render → New + → Blueprint → choose this repository.
+# Database: Neon Postgres (free tier does not expire; Render's free Postgres expires after 30 days).
+services:
+  - type: web
+    name: cet-payroll
+    runtime: python
+    plan: free
+    buildCommand: pip install -r server/requirements.txt
+    startCommand: cd server && uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    healthCheckPath: /api/health
+    autoDeploy: true
+    branch: main
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      # Neon connection string (Neon → Connect → Connection string), set in the dashboard
+      - key: DATABASE_URL
+        sync: false
+      # encrypts the stored payroll data; generated once by Render. Changing or losing it makes saved data unreadable.
+      - key: DATA_KEY
+        generateValue: true
+      # first admin account, created only while there are no users yet
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: SESSION_HOURS
+        value: "12"

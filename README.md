@@ -5,7 +5,27 @@ Monthly payroll workspace for Constant Energy Services (Thailand) Co., Ltd., bui
 - GitHub Pages: https://apichartexpert.github.io/cet-payroll/
 - claude.ai artifact: https://claude.ai/artifact/LYkBmnXEY16zjVddAvfqFF
 
-Each browser keeps its own data, so the two links do not share data: use **ตั้งค่า → สำรองข้อมูลทั้งหมด** and restore the backup to move between them. On first use, enter the company tax ID, payroll bank account and SSO account under **ตั้งค่า**.
+- Shared, multi-user: the Render deployment (see below), with its own login.
+
+On GitHub Pages and claude.ai each browser keeps its own data. On Render everyone who logs in works on one shared data set. On first use, enter the company tax ID, payroll bank account and SSO account under **ตั้งค่า**.
+
+## Shared version on Render
+
+`server/` is a small FastAPI app that serves the same `index.html` and keeps one shared payroll data set:
+
+- **Login** with usernames and passwords managed by an admin under **ตั้งค่า → ผู้ใช้งาน**. Roles: ผู้ดูแลระบบ (admin), ผู้แก้ไข (editor), ดูอย่างเดียว (viewer).
+- **Encrypted at rest** with AES-256-GCM; the key comes from `DATA_KEY`.
+- **No silent overwrites:** every save names the version it started from. If someone else saved in between, the app asks whether to load their version or save over it. Open screens refresh when others save.
+- **History:** every save and user change is logged (who, when, version) under **ตั้งค่า**.
+
+Deploy:
+
+1. Create a free Postgres database on [Neon](https://neon.tech) and copy its connection string.
+2. Render → **New + → Blueprint** → choose this repository (`render.yaml`).
+3. Fill in `DATABASE_URL` (the Neon string), `ADMIN_USERNAME` and `ADMIN_PASSWORD`. Render generates `DATA_KEY`; keep it, because without it the saved data cannot be read.
+4. Open the Render URL, log in as the admin, import the data file or payroll register, then add users under **ตั้งค่า**.
+
+Run the tests with `python -m pytest server/tests`.
 
 ## Monthly flow
 
