@@ -9,6 +9,9 @@ Environment:
   DATA_KEY        any long random string; the AES key is derived from it. Losing it makes the stored data unreadable.
   ADMIN_USERNAME  first admin, created only while the user table is empty
   ADMIN_PASSWORD
+  ADMIN_RESET     set to 1 to reset ADMIN_USERNAME's password to ADMIN_PASSWORD (at least 10 characters) on the
+                  next start: the account becomes an active admin, its sessions end and its lockout clears.
+                  Remove it again afterwards.
   SESSION_HOURS   login lifetime (default 12)
 """
 import base64
@@ -27,7 +30,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import (Boolean, Column, DateTime, Integer, MetaData, String, Table, Text, create_engine,
-                        func, insert, select, update)
+                        delete, func, insert, select, update)
 
 log = logging.getLogger("cet-payroll")
 ROOT = Path(__file__).resolve().parent.parent
@@ -154,13 +157,29 @@ def too_many_fails(key):
 
 def bootstrap_admin():
     u, p = os.environ.get("ADMIN_USERNAME", "").strip().lower(), os.environ.get("ADMIN_PASSWORD", "")
+    reset = os.environ.get("ADMIN_RESET", "").strip().lower() in ("1", "true", "yes")
     with engine.begin() as c:
-        if c.execute(select(func.count()).select_from(users)).scalar():
+        has_users = c.execute(select(func.count()).select_from(users)).scalar()
+        if has_users and not reset:
             return
-        if u and p:
+        if not (u and p):
+            if reset:
+                log.error("ADMIN_RESET is set but ADMIN_USERNAME / ADMIN_PASSWORD are empty; nothing reset")
+            return
+        if reset and not strong_enough(p):
+            log.error("ADMIN_RESET: ADMIN_PASSWORD needs at least 10 characters; nothing reset")
+            return
+        row = c.execute(select(users.c.id).where(users.c.username == u)).first()
+        if row:
+            c.execute(update(users).where(users.c.id == row[0]).values(pw_hash=hash_pw(p), role="admin", active=True))
+            c.execute(delete(sessions).where(sessions.c.user_id == row[0]))
+        else:
             c.execute(insert(users).values(username=u, name=u, role="admin", pw_hash=hash_pw(p), active=True,
                                            created_at=now()))
-            c.execute(insert(audit).values(at=now(), username=u, action="bootstrap_admin", detail=""))
+        c.execute(insert(audit).values(at=now(), username=u, action="admin_reset" if has_users else "bootstrap_admin",
+                                       detail=""))
+        if has_users:
+            log.warning("ADMIN_RESET: password reset for %s; remove ADMIN_RESET from the environment", u)
 
 
 bootstrap_admin()

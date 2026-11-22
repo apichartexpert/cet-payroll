@@ -25,6 +25,8 @@ Deploy:
 3. Fill in `DATABASE_URL` (the Neon string), `ADMIN_USERNAME` and `ADMIN_PASSWORD`. Render generates `DATA_KEY`; keep it, because without it the saved data cannot be read.
 4. Open the Render URL, log in as the admin, import the data file or payroll register, then add users under **ตั้งค่า**.
 
+Forgot the admin password: in Render → Environment set `ADMIN_USERNAME`, a new `ADMIN_PASSWORD` (at least 10 characters) and `ADMIN_RESET` = `1`, save (Render restarts the service), log in, then delete `ADMIN_RESET` and `ADMIN_PASSWORD`.
+
 Run the tests with `python -m pytest server/tests`.
 
 ## Monthly flow

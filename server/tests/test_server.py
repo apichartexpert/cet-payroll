@@ -131,3 +131,31 @@ def test_change_password(srv):
     assert a.post("/api/me/password", json={"old": ADMIN_PW, "new": "new-admin-pass-1"}, headers=H).status_code == 200
     assert a.get("/api/me").status_code == 401  # all sessions closed after a password change
     client(main, "admin", "new-admin-pass-1")
+
+
+def test_admin_reset_from_environment(srv, monkeypatch):
+    main, _ = srv
+    admin = client(main, "admin", ADMIN_PW)
+    make_user(admin, "bob", "viewer")
+    # without ADMIN_RESET a changed ADMIN_PASSWORD does nothing once users exist
+    monkeypatch.setenv("ADMIN_PASSWORD", "new-admin-pass-1")
+    main.bootstrap_admin()
+    assert client(main).post("/api/login", json={"username": "admin", "password": "new-admin-pass-1"},
+                             headers=H).status_code == 401
+    # too short: refused
+    monkeypatch.setenv("ADMIN_RESET", "1")
+    monkeypatch.setenv("ADMIN_PASSWORD", "short")
+    main.bootstrap_admin()
+    main._fails.clear()
+    client(main, "admin", ADMIN_PW)
+    # reset works, old sessions end, other users untouched
+    monkeypatch.setenv("ADMIN_PASSWORD", "new-admin-pass-1")
+    main.bootstrap_admin()
+    assert admin.get("/api/me").status_code == 401
+    client(main, "admin", "new-admin-pass-1")
+    client(main, "bob", "user-pass-123")
+    # a new username creates an extra admin
+    monkeypatch.setenv("ADMIN_USERNAME", "AJ2")
+    main.bootstrap_admin()
+    me = client(main, "aj2", "new-admin-pass-1").get("/api/me").json()
+    assert me["user"]["role"] == "admin"
