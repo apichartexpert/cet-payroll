@@ -944,7 +944,7 @@ function bonusRegisterPanel(p){
 window.confirmBonus=function(mode){const p=IMP.register;if(!p)return;const r=applyBonus(p,mode);
   const it=IMP.files.find(x=>x.kind==='register'&&x.status==='review');
   if(it){it.status='done';it.kind='bonus';it.msg=`บันทึกเป็นรอบโบนัสงวด ${ym(p.reg.y,p.reg.m)} แล้ว · ${r.count} คน${r.skipped.length?' · ข้ามรหัสที่ไม่รู้จัก: '+r.skipped.join(', '):''}`;}
-  IMP.register=null;P={y:p.reg.y,m:p.reg.m};render();toast(`บันทึกรอบโบนัส ${THMONTH[p.reg.m-1]} ${p.reg.y} แล้ว — ดูได้ที่หน้า คำนวณเงินเดือน`);};
+  IMP.register=null;P={y:p.reg.y,m:p.reg.m};try{sessionStorage.setItem('cet.period',P.y+'-'+P.m);}catch(e){}go('run');toast(`บันทึกรอบโบนัส ${THMONTH[p.reg.m-1]} ${p.reg.y} แล้ว (ปิดงวดโบนัส) — อยู่ใต้ทะเบียนเงินเดือนในหน้านี้`);};
 function bonusTotals(b){const R=Object.entries(b.rows).map(([code,x])=>Object.assign({code,e:S.employees.find(e=>e.code===code)},x));
   const sum=k=>r2(R.reduce((s,x)=>s+num(x[k]),0));return{R,gross:sum('gross'),wht:sum('wht'),sso:sum('sso'),pf:sum('pf'),loan:sum('loan'),net:sum('net')};}
 /* bonus runs created in the app: enter each person's bonus; WHT = extra annual tax the bonus causes (marginal rate),
@@ -1923,7 +1923,7 @@ function registerPanel(){
   const p=IMP.register;if(!p)return '';if(p.bonus)return bonusRegisterPanel(p);const s=registerSummary(p);const k=ym(p.reg.y,p.reg.m);
   return `<div class="panel"><div class="hd"><h3>ทะเบียนเงินเดือน ${THMONTH[p.reg.m-1]} ${p.reg.y} · ${esc(p.file)}</h3>
     <button class="btn" onclick="IMP.register=null;render()">ยกเลิก</button>
-    <button class="btn pri" onclick="confirmRegister()">บันทึกเป็นยอดจริงเดือน ${THMONTH[p.reg.m-1]}</button></div>
+    <button class="btn pri" onclick="confirmRegister()" title="บันทึก + ปิดงวด แล้วไปหน้าคำนวณเงินเดือน">บันทึกเป็นยอดจริงเดือน ${THMONTH[p.reg.m-1]} และปิดงวด</button></div>
   <div class="bd"><div class="cards">
     <div class="card"><div class="k">พนักงาน</div><div class="v num">${s.count}</div></div>
     <div class="card"><div class="k">เงินได้รวม</div><div class="v num">${fmt(s.gross)}</div></div>
@@ -1940,7 +1940,7 @@ function registerPanel(){
 }
 window.confirmRegister=function(){const p=IMP.register;if(!p)return;const r=applyRegister(p);
   const it=IMP.files.find(x=>x.kind==='register'&&x.status==='review');if(it){it.status='done';it.msg=`บันทึกเป็นยอดจริงงวด ${ym(p.reg.y,p.reg.m)} แล้ว · ${r.count} คน${r.added?' · เพิ่มพนักงานใหม่ '+r.added+' คน':''}${r.left.length?' · ไม่มีเงินเดือนเดือนถัดไปในแผนภาษี จึงตั้งเป็นลาออก: '+r.left.join(', '):''}`;}
-  IMP.register=null;const[y,m]=[p.reg.y,p.reg.m];P={y,m};render();toast(`บันทึกทะเบียน ${THMONTH[m-1]} ${y} เป็นยอดจริงแล้ว — ไปเดือนถัดไปเพื่อเริ่มงวดใหม่`);};
+  IMP.register=null;const[y,m]=[p.reg.y,p.reg.m];P={y,m};try{sessionStorage.setItem('cet.period',y+'-'+m);}catch(e){}go('run');toast(`บันทึกทะเบียน ${THMONTH[m-1]} ${y} เป็นยอดจริงและปิดงวดแล้ว — ตรวจยอด / ส่งออกไฟล์ได้ที่หน้านี้`);};
 
 function vMpa(el){
   const run=getRun(true);const locked=run.status==='locked';const mp=run.mpa;
