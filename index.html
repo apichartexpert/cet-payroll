@@ -304,6 +304,11 @@ function splitName(full){ // "Mr. Somchai Jaidee" -> {title,first,last}
 
 /* run access */
 function getRun(create){let r=S.runs[pkey()];if(!r&&create){r={status:'draft',payDate:defaultPayDate(),rows:{}};S.runs[pkey()]=r;}return r;}
+/* months inside the imported actuals are locked: their figures come from the register / data file, so the app never
+   recalculates them, closes a run over them, or reopens their closed run */
+function isActualsMonth(y,m){return y===S.historyYear&&m<=(S.historyThroughMonth||0);}
+function actualsOnly(y,m){const r=S.runs[ym(y,m)];return isActualsMonth(y,m)&&!(r&&r.status==='locked');}
+const ACT_MSG='เดือนนี้เป็นยอดจริงที่นำเข้า — ล็อกไว้ ปิดงวดทับไม่ได้ (ถ้าต้องแก้ ให้นำเข้าทะเบียนเดือนนี้ใหม่ หรือลบเดือนนี้ที่หน้าภาพรวม)';
 function defaultPayDate(){const last=new Date(P.y,P.m,0).getDate();return P.y+'-'+String(P.m).padStart(2,'0')+'-'+String(Math.min(28,last)).padStart(2,'0');}
 const blankRow=()=>({ot:0,incentive:null,otherAdd:0,studentLoan:null,otherDed:0,paidAdvance:0,whtOverride:null,ssoOverride:null,pfOverride:null,salaryOverride:null,exclude:false});
 function rowOf(run,code){if(!run.rows[code])run.rows[code]=blankRow();return run.rows[code];}
@@ -622,18 +627,21 @@ window.delEmp=function(code){
 
 /* ---------- payroll run ---------- */
 function vRun(el){
-  const run=getRun(true);const locked=run.status==='locked';
+  if(actualsOnly(P.y,P.m)){el.innerHTML=actualsRunPage();wireBonusPanel(el);return;}
+  const run=getRun(true);const locked=run.status==='locked';const actM=isActualsMonth(P.y,P.m);
+  const revert=actM&&!run.source&&S.employees.some(e=>histHas(e,P.m));
   const t=runTotals();t.prevTotal=r2(t.rows.reduce((a,x)=>a+(prevMonthNet(x.e,P.y,P.m)||0),0));
   const changed=t.rows.filter(x=>{const pv=prevMonthNet(x.e,P.y,P.m);return pv==null||Math.abs(x.c.transfer-pv)>0.5;}).length;
   const gapM=new Set();for(const x of t.rows)for(const g of (x.c.detail&&x.c.detail.gaps)||[])gapM.add(g);
   el.innerHTML=`
-  <h2>คำนวณเงินเดือน ${THMONTH[P.m-1]} ${P.y} ${locked?'<span class="chip g">ปิดงวดแล้ว</span>':'<span class="chip a">ฉบับร่าง</span>'}</h2>
+  <h2>คำนวณเงินเดือน ${THMONTH[P.m-1]} ${P.y} ${locked?'<span class="chip g">ปิดงวดแล้ว</span>':'<span class="chip a">ฉบับร่าง</span>'}${actM?' <span class="chip b">ยอดจริง · ล็อก</span>':''}</h2>
+  ${actM?`<div class="note">${run.source?'งวดนี้มาจากทะเบียน '+esc(run.source)+' — ':''}${ACT_MSG}${revert&&canEditData()?` · งวดนี้ปิดในแอปและใช้แทนยอดจริงที่นำเข้า <button class="btn sm" onclick="revertToActuals()">กลับไปใช้ยอดจริงที่นำเข้า</button>`:''}</div>`:''}
   <p class="sub">ภาษีคำนวณแบบ${{level:'ระดับคงที่ + ภาษีส่วนเพิ่มของเงินได้ครั้งคราวในเดือนที่จ่าย · ธันวาคมปรับให้ครบภาษีทั้งปี',catchup:'เกลี่ยทั้งปีตามจริง (ภาษีทั้งปี − หักแล้ว) ÷ เดือนคงเหลือ',std12:'มาตรฐาน ภาษีทั้งปี ÷ 12'}[S.settings.whtMethod]||''} · แตะยอดภาษีเพื่อดูวิธีคำนวณ · ช่องสีเหลือง = แก้ไขเอง (override)</p>
   <div class="panel"><div class="hd"><h3>ทะเบียนจ่ายเงินเดือน · ${t.count} คน</h3>
     <label style="font-size:12px;color:var(--muted)">วันที่จ่าย <input type="date" id="payDate" value="${esc(run.payDate||defaultPayDate())}" ${locked?'disabled':''} style="margin-left:4px"></label>
     <label style="font-size:12px;color:var(--muted)" title="ยอดเงินสมทบส่วนนายจ้างตามใบแจ้งยอดกองทุน — ใช้ในบันทึกบัญชี PEAK">PF นายจ้าง (ตามใบแจ้งกองทุน) <input id="pfErTotal" class="num" style="width:110px;text-align:right;margin-left:4px" value="${isSet(run.pfErTotal)?run.pfErTotal:''}" placeholder="${fmt(t.pfErCalc)}" ${locked?'disabled':''}></label>
     <button class="btn" onclick="exportRegisterXlsx()">ส่งออกทะเบียน (รูปแบบเดิม)</button>
-    ${locked?'<button class="btn" onclick="unlockRun()">เปิดงวดแก้ไข</button>':'<button class="btn pri" onclick="lockRun()">ปิดงวด ✓</button>'}
+    ${actM?'':locked?'<button class="btn" onclick="unlockRun()">เปิดงวดแก้ไข</button>':'<button class="btn pri" onclick="lockRun()">ปิดงวด ✓</button>'}
   </div>
   <div class="tblwrap" style="max-height:62vh;overflow-y:auto"><table id="runtbl"><thead><tr>
     <th>รหัส</th><th>ชื่อ</th><th class="r">เงินเดือน</th><th class="r">OT/Success fee</th><th class="r">Incentive</th><th class="r">เงินได้อื่น</th>
@@ -697,7 +705,7 @@ function vRun(el){
     });
   });
 }
-window.lockRun=function(){const r=getRun(true);
+window.lockRun=function(){if(isActualsMonth(P.y,P.m)){toast(ACT_MSG);render();return;}const r=getRun(true);
   // snapshot computed values so later months use them even if master data changes
   const t=runTotals();
   for(const{e,c}of t.rows){
@@ -712,7 +720,27 @@ window.lockRun=function(){const r=getRun(true);
   }
   r.status='locked';
   queueSave();render();toast('ปิดงวด '+pkey()+' แล้ว — ยอดถูกตรึงไว้สำหรับการคำนวณเดือนถัดไป');};
-window.unlockRun=function(){const r=getRun(true);r.status='draft';queueSave();render();};
+window.unlockRun=function(){if(isActualsMonth(P.y,P.m)){toast(ACT_MSG);render();return;}const r=getRun(true);r.status='draft';queueSave();render();};
+/* a run closed in the app over an imported-actuals month: drop it so the imported figures are used again (MPA / documents kept) */
+window.revertToActuals=function(){if(!canEditData())return;const k=pkey();const r=S.runs[k];if(!r)return;
+  if(!window._revArm){window._revArm=true;setTimeout(()=>window._revArm=false,4000);toast('กดอีกครั้งเพื่อยืนยัน — ลบงวดที่ปิดในแอป แล้วใช้ยอดจริงที่นำเข้าแทน');return;}
+  window._revArm=false;S.runs[k]={status:'draft',payDate:r.payDate,rows:{},mpa:r.mpa,docs:r.docs};queueSave();render();toast('ใช้ยอดจริงที่นำเข้าของ '+k+' แล้ว');};
+/* imported-actuals month without a closed run: read-only page with the imported figures person by person */
+function actualsTable(y,m){const g=(e,k)=>num(histVal(e.history2026,k,m));
+  const R=S.employees.filter(e=>histHas(e,m)).sort((a,b)=>a.code.localeCompare(b.code));
+  const cols=[['income','เงินเดือน'],['other','เงินได้อื่น'],['wht','ภาษี'],['ssf','ปกส.'],['pf','PF'],['loan','กยศ.'],['oded','หักอื่น'],['net','สุทธิ']];
+  const tot=k=>r2(R.reduce((s,e)=>s+g(e,k),0));
+  return{n:R.length,html:`<div class="tblwrap" style="max-height:60vh;overflow-y:auto"><table><thead><tr><th>รหัส</th><th>ชื่อ</th>${cols.map(c=>`<th class="r">${c[1]}</th>`).join('')}</tr></thead>
+    <tbody>${R.map(e=>`<tr><td class="num">${esc(e.code)}</td><td class="name-cell">${esc(e.name)}</td>${cols.map(c=>`<td class="r num">${fmt(g(e,c[0]))}</td>`).join('')}</tr>`).join('')}</tbody>
+    <tfoot><tr><td colspan="2">รวม ${R.length} คน</td>${cols.map(c=>`<td class="r num">${fmt(tot(c[0]))}</td>`).join('')}</tr></tfoot></table></div>`};}
+function actualsRunPage(){const T=actualsTable(P.y,P.m);const edit=canEditData();
+  return `<h2>คำนวณเงินเดือน ${THMONTH[P.m-1]} ${P.y} <span class="chip g">ยอดจริง · ล็อก</span></h2>
+  <div class="note">${ACT_MSG} · ภาษีเดือนถัดไปคำนวณจากยอดจริงชุดนี้</div>
+  <div class="panel"><div class="hd"><h3>ยอดจริง ${THMONTH[P.m-1]} ${P.y} · ${T.n} คน</h3>
+    <span style="font-size:12px;color:var(--muted);margin-right:auto">จากทะเบียน / ไฟล์ข้อมูลที่นำเข้า</span>
+    <button class="btn" onclick="go('dash')">กลับภาพรวม</button>${edit?`<button class="btn" onclick="go('mpa')">นำเข้าทะเบียนเดือนนี้ใหม่</button>`:''}</div>
+    ${T.html}</div>
+  ${bonusRunsPanel()}`;}
 window.showBrk=function(code){
   const emp=S.employees.find(x=>x.code===code);const run=getRun(false);const r=run?run.rows[code]:null;
   const c=calcRow(emp,r||{},P.y,P.m,true);const d=c.detail;
@@ -754,9 +782,10 @@ function brkHow(d){
   if(d.how==='catchup')return `(${fmt0(d.taxAll)} − หักแล้ว ${fmt0(d.whtYTD)}) ÷ ${d.remaining} เดือน`;
   return 'ภาษีเงินเดือนทั้งปี ÷ 12 + ส่วนของเงินได้อื่น';
 }
-window.setWhtOvr=function(code){const v=document.getElementById('whtOvrIn').value.trim();const r=rowOf(getRun(true),code);
+window.setWhtOvr=function(code){const run0=getRun(true);if(run0.status==='locked'||isActualsMonth(P.y,P.m)){toast('งวด '+pkey()+' ปิด/ล็อกอยู่ — แก้ภาษีไม่ได้');return;}
+  const v=document.getElementById('whtOvrIn').value.trim();const r=rowOf(run0,code);
   r.whtOverride=v===''?null:num(v);queueSave();dlgBrk.close();render();};
-window.clearWhtOvr=function(code){const r=rowOf(getRun(true),code);r.whtOverride=null;queueSave();dlgBrk.close();render();};
+window.clearWhtOvr=function(code){const run0=getRun(true);if(run0.status==='locked'||isActualsMonth(P.y,P.m)){toast('งวด '+pkey()+' ปิด/ล็อกอยู่ — แก้ภาษีไม่ได้');return;}const r=rowOf(run0,code);r.whtOverride=null;queueSave();dlgBrk.close();render();};
 function exportRunXlsx(){
   const t=runTotals();const run=getRun(false);
   const aoa=[[S.company.nameEN],['Payroll report'],['Period',pkey(),'','Pay date',run&&run.payDate||''],[],
@@ -1278,7 +1307,7 @@ window.selMonth=function(y,m){P={y,m};MSUM_Y=y;try{sessionStorage.setItem('cet.p
 function monthWhat(I){const what=[];
   if(I.inHist)what.push(`<span class="chip g">ยอดจริง ${I.histN} คน</span>`);
   else if(I.histN)what.push(`<span class="chip a" title="มียอดจริงเก็บไว้ แต่ยังไม่ได้ใช้ เพราะเดือนก่อนหน้ายังไม่มียอดจริงครบ">ยอดจริงเก็บไว้ ${I.histN} คน (ยังไม่ใช้)</span>`);
-  if(I.run)what.push(I.run.status==='locked'?`<span class="chip g">งวดปิดแล้ว${I.run.source?' · ทะเบียน '+esc(I.run.source):''}</span>`:`<span class="chip a">งวดฉบับร่าง (ยังไม่ปิด)</span>`);
+  if(I.run&&!(I.inHist&&I.run.status!=='locked'))what.push(I.run.status==='locked'?`<span class="chip g">งวดปิดแล้ว${I.run.source?' · ทะเบียน '+esc(I.run.source):''}</span>`:`<span class="chip a">งวดฉบับร่าง (ยังไม่ปิด)</span>`);
   if(I.mpa)what.push(`<span class="chip b">MPA ${esc(I.mpa.file||'')} · ${(I.mpa.lines||[]).length} รายการ</span>`);
   if(I.docs)what.push(`<span class="chip b">เอกสาร ${I.docs} ไฟล์</span>`);
   if(I.bonus.length)what.push(`<span class="chip b">โบนัส ${I.bonus.length} รอบ · ${fmt(I.bGross)}</span>`);
@@ -1293,7 +1322,7 @@ function vDash(el){
   const I=[];for(let m=1;m<=12;m++)I.push(monthInfo(y,m));
   const sum=k=>r2(I.reduce((s,x)=>s+num(x[k]),0));
   const closed=I.filter((x,i)=>monthClosed(y,i+1)).length;
-  const selIn=P.y===y;const run=getRun(false);const locked=run&&run.status==='locked';
+  const selIn=P.y===y;const run=getRun(false);const actSel=isActualsMonth(P.y,P.m);const locked=(run&&run.status==='locked')||actSel;
   const rows=I.map((x,i)=>{const m=i+1;const isSel=selIn&&P.m===m;const isW=W===m;const isDel=DELM&&DELM.y===y&&DELM.m===m;
     const lockedM=x.run&&x.run.status==='locked';
     return `<tr style="${isDel?'background:#fff4e5':isSel?'background:var(--accent-soft)':''}">
@@ -1320,7 +1349,7 @@ function vDash(el){
     <div class="tblwrap"><table><thead><tr><th>เดือน</th><th>มีข้อมูลอะไรบ้าง</th><th class="r">คน</th><th class="r">เงินได้รวม</th><th class="r">ภาษีหัก ณ ที่จ่าย</th><th class="r">โอนสุทธิ (เงินเดือน)</th><th></th></tr></thead>
     <tbody>${rows}</tbody></table></div>
     <div class="bd"><p class="sub">เงินได้รวมและภาษีรวมโบนัสแล้ว · ลบ = ลบงวด MPA เอกสาร โบนัส และยอดจริงของเดือนนั้น (ไม่ลบรายชื่อพนักงาน)</p></div></div>
-  <div class="panel"><div class="hd"><h3>งวดที่เลือก: ${THMONTH[P.m-1]} ${P.y} ${locked?'<span class="chip g">ปิดงวดแล้ว</span>':run?'<span class="chip a">ฉบับร่าง</span>':'<span class="chip b">ยังไม่เริ่ม</span>'}</h3>
+  <div class="panel"><div class="hd"><h3>งวดที่เลือก: ${THMONTH[P.m-1]} ${P.y} ${actSel?'<span class="chip g">ยอดจริง · ล็อก</span>':locked?'<span class="chip g">ปิดงวดแล้ว</span>':run?'<span class="chip a">ฉบับร่าง</span>':'<span class="chip b">ยังไม่เริ่ม</span>'}</h3>
     ${W&&!(P.y===y&&P.m===W)?`<button class="btn" onclick="selMonth(${y},${W})">ไปงวดถัดไปที่ต้องทำ (${THMONTH[W-1]})</button>`:''}
     <button class="btn" onclick="go('run')">ดูข้อมูล</button>${edit&&!locked?`<button class="btn" onclick="go('mpa')">นำเข้าไฟล์เดือนนี้</button><button class="btn pri" onclick="processMonth(${P.y},${P.m})">ประมวลผล + คำนวณภาษี</button>`:''}</div>
     <div class="bd">${stepperHtml()}</div></div>
@@ -1359,6 +1388,7 @@ window.exportTaxCalcXlsx=function(){const t=runTotals();const R=taxCalcRows(t);
   saveFile('CET '+ym(P.y,P.m).replace('-','')+' Tax calculation.xlsx',aoaToXlsx([{name:'Tax calculation',aoa,widths:[9,30,14,13,12,12,14,12,13,12,13,16]}]));};
 /* ประมวลผล from the year overview: build the run (previous month + this month's MPA if not applied yet) and show its tax calculation */
 window.processMonth=function(y,m){P={y,m};MSUM_Y=y;try{sessionStorage.setItem('cet.period',y+'-'+m);}catch(e){}
+  if(isActualsMonth(y,m)){go('run');toast(ACT_MSG);return;}
   const run=getRun(true);let n=0;
   if(run.status!=='locked'&&run.mpa&&!(run.mpaApplied&&run.mpaApplied.length))n=applyMpa(run,pkey());
   TAXOPEN=true;queueSave();go('run');document.getElementById('taxPanel')?.scrollIntoView({block:'start'});
@@ -1616,6 +1646,7 @@ function addDocs(files,quiet){
 window.gotoPeriod=function(k){const[y,m]=k.split('-').map(Number);P={y,m};try{sessionStorage.setItem('cet.period',y+'-'+m);}catch(e){}render();};
 let regenArm=false;
 window.applyMpaNow=function(regen){
+  if(isActualsMonth(P.y,P.m)){toast(ACT_MSG);return;}
   const run=getRun(true);if(!run.mpa)return;
   if(regen){
     const edited=Object.keys(run.rows).length;
@@ -2064,8 +2095,8 @@ function fileCard(it){
 }
 function renderImportCards(){const box=document.getElementById('fileCards');if(box)box.innerHTML=IMP.files.map(fileCard).join('');else if(VIEW==='mpa')render();}
 function stepState(){
-  const run=getRun(false)||{};const locked=run.status==='locked';
-  const hasInput=!!(run.mpa||run.source||(run.docs||[]).length);
+  const run=getRun(false)||{};const locked=run.status==='locked'||isActualsMonth(P.y,P.m);
+  const hasInput=isActualsMonth(P.y,P.m)||!!(run.mpa||run.source||(run.docs||[]).length);
   const reviewed=!!(run.mpa&&run.mpa.lines.every(L=>!L.include||L.code||(L.kind==='emp'&&L.action!=='C')));
   const generated=locked||!!(run.mpaApplied&&run.mpaApplied.length)||!!run.source;
   return[{n:1,t:'นำเข้าไฟล์',s:'MPA · เอกสาร · ทะเบียน',done:hasInput,v:'mpa'},{n:2,t:'ตรวจรายการ',s:'จับคู่พนักงาน/เอกสาร',done:reviewed,v:'mpa'},
