@@ -91,6 +91,8 @@ input,select,textarea{font:inherit;color:var(--fg);background:var(--panel);borde
 input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 input.cell{width:92px;text-align:right;padding:3px 6px;background:transparent;border-color:transparent}
 input.cell:hover,input.cell:focus{border-color:var(--line);background:var(--panel)}
+input.bcell{width:110px;text-align:right;padding:3px 6px;background:transparent;border:1px solid var(--line)}
+input.bcell.ovr{border-color:var(--amber);background:var(--amber-soft);color:var(--amber);font-weight:600}
 input.cell.ovr{border-color:var(--amber);background:var(--amber-soft);color:var(--amber);font-weight:600}
 input[type=file]{display:none}
 /* buttons */
@@ -339,7 +341,7 @@ function monthData(emp,y,m){
     return{income:g(h.income),other:g(h.other),wht:g(h.wht),sso:g(h.ssf),pf:g(h.pf),src:'hist'};
   }
   if(row)return fromRun();
-  const b=bonusFor(emp,y,m);if(b.inc||b.wht)return{income:0,other:b.inc,wht:b.wht,sso:b.sso,pf:b.pf,src:'run'};
+  const b=bonusFor(emp,y,m);if(b.inc||b.wht)return{income:0,other:b.inc,wht:b.wht,sso:b.sso,pf:b.pf,src:'run',gap:isEmployed(emp,y,m)};
   return null;
 }
 function annualTax(emp,annReg,annOther,annSSO,annPF){
@@ -370,7 +372,7 @@ function computeWHT(emp,r,y,m){
   for(let mm=1;mm<=12;mm++){
     if(mm<m){
       const d=monthData(emp,y,mm);
-      if(d){annReg+=d.income;annOther+=d.other;annSSO+=d.sso;annPF+=d.pf;whtYTD+=d.wht;months.push({m:mm,inc:d.income,oth:d.other,wht:d.wht,src:d.src});}
+      if(d){annReg+=d.income;annOther+=d.other;annSSO+=d.sso;annPF+=d.pf;whtYTD+=d.wht;months.push({m:mm,inc:d.income,oth:d.other,wht:d.wht,src:d.src});if(d.gap)gaps.push(mm);}
       else{months.push({m:mm,inc:0,oth:0,wht:0,src:'-'});if(isEmployed(emp,y,mm)&&!(y===S.historyYear&&emp.history2026&&mm<=S.historyThroughMonth))gaps.push(mm);}
     }else{
       const inc=mm===m?curSal:(isEmployed(emp,y,mm)?num(emp.salary):0);
@@ -888,7 +890,7 @@ function exportSsoTxt(){
 const bonusRunsOf=(y,m)=>(S.bonusRuns&&S.bonusRuns[ym(y,m)])||[];
 const histCovers=(emp,y,m)=>y===S.historyYear&&!!emp.history2026&&m<=S.historyThroughMonth;
 function bonusFor(emp,y,m){let inc=0,wht=0,sso=0,pf=0;
-  for(const b of bonusRunsOf(y,m)){const x=b.rows[emp.code];if(x){inc+=num(x.gross);wht+=num(x.wht);sso+=num(x.sso);pf+=num(x.pf);}}
+  for(const b of bonusRunsOf(y,m)){if(b.id===BONUS_SKIP)continue;const x=b.rows[emp.code];if(x){inc+=num(x.gross);wht+=num(x.wht);sso+=num(x.sso);pf+=num(x.pf);}}
   return{inc:r2(inc),wht:r2(wht),sso:r2(sso),pf:r2(pf)};}
 function isBonusRegister(p){
   const R=p.reg.rows;
@@ -913,6 +915,7 @@ function applyBonus(p,mode){ // mode: 'replace' (the latest bonus run of the mon
   const s=bonusSummary(p);
   let b=list.find(x=>x.source===p.file)||(mode==='replace'&&list.length?list[list.length-1]:null);
   if(!b){b={id:'B'+Date.now().toString(36),label:'',payDate:null,source:p.file,rows:{}};list.push(b);}
+  b.status='locked';
   b.label=list.length>1?'โบนัส รอบ '+(list.indexOf(b)+1):'โบนัส';b.source=p.file;b.sheet=p.reg.sheet;b.rows={};b.importedAt=new Date().toISOString();
   for(const x of s.rows){if(!x.code||!S.employees.some(e=>e.code===x.code))continue;
     b.rows[x.code]={name:x.name,gross:x.gross,wht:x.wht,sso:x.sso,pf:x.pf,loan:x.loan,oded:x.oded,net:x.net,acct:fmtAcct(x.acct)};}
@@ -944,21 +947,59 @@ window.confirmBonus=function(mode){const p=IMP.register;if(!p)return;const r=app
   IMP.register=null;P={y:p.reg.y,m:p.reg.m};render();toast(`บันทึกรอบโบนัส ${THMONTH[p.reg.m-1]} ${p.reg.y} แล้ว — ดูได้ที่หน้า คำนวณเงินเดือน`);};
 function bonusTotals(b){const R=Object.entries(b.rows).map(([code,x])=>Object.assign({code,e:S.employees.find(e=>e.code===code)},x));
   const sum=k=>r2(R.reduce((s,x)=>s+num(x[k]),0));return{R,gross:sum('gross'),wht:sum('wht'),sso:sum('sso'),pf:sum('pf'),loan:sum('loan'),net:sum('net')};}
+/* bonus runs created in the app: enter each person's bonus; WHT = extra annual tax the bonus causes (marginal rate),
+   computed from the year's actuals + projection, other bonus runs included; can be set by hand */
+let BONUS_SKIP=null;
+function bonusAutoWht(e,b,amount){if(!(amount>0))return 0;BONUS_SKIP=b.id;
+  try{const run=S.runs[pkey()];const r=(run&&run.rows[e.code])||{};const d=computeWHT(e,r,P.y,P.m).detail;
+    return r2(Math.max(0,annualTax(e,d.annReg,d.annOther+amount,d.annSSO,d.annPF).tax-annualTax(e,d.annReg,d.annOther,d.annSSO,d.annPF).tax));}
+  finally{BONUS_SKIP=null;}}
+function recalcBonus(b){if(b.status!=='draft')return;
+  for(const[code,x]of Object.entries(b.rows)){const e=S.employees.find(z=>z.code===code);if(!e)continue;
+    x.wht=x.whtOvr!=null?num(x.whtOvr):bonusAutoWht(e,b,num(x.gross));x.net=r2(num(x.gross)-x.wht-num(x.sso)-num(x.pf)-num(x.loan)-num(x.oded));}}
+window.addBonusRun=function(){S.bonusRuns=S.bonusRuns||{};const k=pkey();const list=S.bonusRuns[k]=S.bonusRuns[k]||[];
+  list.push({id:'B'+Date.now().toString(36),label:'โบนัส'+(list.length?' รอบ '+(list.length+1):''),payDate:defaultPayDate(),source:'สร้างในแอป',status:'draft',rows:{}});
+  queueSave();render();toast('เพิ่มงวดโบนัส '+THMONTH[P.m-1]+' '+P.y+' แล้ว — ใส่ยอดโบนัสรายคนในตาราง');};
+window.setBonusCell=function(i,code,f,v){const b=bonusRunsOf(P.y,P.m)[i];if(!b||b.status!=='draft')return;const e=S.employees.find(z=>z.code===code);
+  v=String(v).trim();
+  if(f==='gross'){const g=num(v);if(!(g>0)){delete b.rows[code];}
+    else{const x=b.rows[code]||(b.rows[code]={name:e?e.name:code,gross:0,wht:0,sso:0,pf:0,loan:0,oded:0,net:0,acct:'',whtOvr:null});x.gross=g;}}
+  else if(f==='wht'&&b.rows[code]){b.rows[code].whtOvr=v===''?null:num(v);}
+  else if(f==='label'){b.label=v||'โบนัส';}
+  recalcBonus(b);queueSave();render();};
+window.lockBonus=function(i,lock){const b=bonusRunsOf(P.y,P.m)[i];if(!b)return;
+  if(lock){recalcBonus(b);b.status='locked';toast('ปิดงวดโบนัสแล้ว — ยอดภาษีถูกตรึงไว้');}else b.status='draft';queueSave();render();};
 function bonusRunsPanel(){
-  const list=bonusRunsOf(P.y,P.m);if(!list.length)return '';
-  return list.map((b,i)=>{const t=bonusTotals(b);return `<div class="panel"><div class="hd"><h3>${esc(b.label||'โบนัส')} · ${THMONTH[P.m-1]} ${P.y} · ${t.R.length} คน</h3>
+  const list=bonusRunsOf(P.y,P.m);
+  const bar=`<div class="panel"><div class="hd"><h3>งวดโบนัส ${THMONTH[P.m-1]} ${P.y}${list.length?' · '+list.length+' รอบ':''}</h3>
+    <span style="font-size:12px;color:var(--muted);margin-right:auto">${list.length?'จ่ายแยกจากเงินเดือน ไม่กระทบทะเบียนเงินเดือนด้านบน':'ยังไม่มีงวดโบนัสในเดือนนี้ — สร้างเอง หรือนำเข้าไฟล์ทะเบียนโบนัสที่หน้า นำเข้าข้อมูล'}</span>
+    <button class="btn pri" onclick="addBonusRun()">+ เพิ่มงวดโบนัส</button></div></div>`;
+  return bar+list.map((b,i)=>{
+    const draft=b.status==='draft';if(draft)recalcBonus(b);
+    const t=bonusTotals(b);const inHist=P.y===S.historyYear&&P.m<=S.historyThroughMonth;
+    const body=draft
+      ?activeEmps().map(e=>{const x=b.rows[e.code];const g=x?num(x.gross):0;
+        return `<tr><td class="num">${esc(e.code)}</td><td class="name-cell">${esc(e.name)}</td>
+          <td class="r"><input class="bcell num" value="${g||''}" inputmode="decimal" onchange="setBonusCell(${i},'${esc(e.code)}','gross',this.value)"></td>
+          <td class="r"><input class="bcell num ${x&&x.whtOvr!=null?'ovr':''}" value="${g?x.wht:''}" inputmode="decimal" ${g?'':'disabled'} title="ว่าง = คำนวณอัตโนมัติ (ภาษีส่วนเพิ่มทั้งปี)" onchange="setBonusCell(${i},'${esc(e.code)}','wht',this.value)"></td>
+          <td class="r num">${g?fmt(x.net):''}</td><td class="num">${esc(digits(e.bankAcct))}</td></tr>`;}).join('')
+      :t.R.map(x=>`<tr><td class="num">${esc(x.code)}</td><td class="name-cell">${esc(x.e?x.e.name:x.name)}</td><td class="r num">${fmt(x.gross)}</td><td class="r num">${fmt(x.wht)}</td><td class="r num">${fmt(x.net)}</td><td class="num">${esc(digits(x.acct)||digits(x.e&&x.e.bankAcct))}</td></tr>`).join('');
+    return `<div class="panel"><div class="hd"><h3>${draft?`<input class="bcell" style="width:150px;text-align:left;font-weight:600" value="${esc(b.label||'โบนัส')}" onchange="setBonusCell(${i},'','label',this.value)">`:esc(b.label||'โบนัส')} · ${THMONTH[P.m-1]} ${P.y} · ${t.R.length} คน ${draft?'<span class="chip a">ฉบับร่าง</span>':'<span class="chip g">ปิดแล้ว</span>'}</h3>
     <label style="font-size:12px;color:var(--muted)">วันที่จ่าย <input type="date" data-bpay="${i}" value="${esc(b.payDate||defaultPayDate())}" style="margin-left:4px"></label>
+    ${draft?`<button class="btn pri" onclick="lockBonus(${i},true)">ปิดงวดโบนัส ✓</button>`:b.source==='สร้างในแอป'?`<button class="btn" onclick="lockBonus(${i},false)">เปิดแก้ไข</button>`:''}
     <button class="btn" onclick="exportBonusXlsx(${i})">ทะเบียนโบนัส (.xlsx)</button>
     <button class="btn" onclick="exportBonusPnd1(${i},'xlsx')">ภ.ง.ด.1 (.xlsx)</button>
     <button class="btn" onclick="exportBonusPnd1(${i},'txt')">ภ.ง.ด.1 (.txt)</button>
-    <button class="btn pri" onclick="exportBonusBbl(${i})">ไฟล์โอน BBL (.txt)</button>
-    <button class="btn" onclick="deleteBonusRun(${i})" title="ลบรอบโบนัสนี้">ลบ</button></div>
+    <button class="btn ${draft?'':'pri'}" onclick="exportBonusBbl(${i})">ไฟล์โอน BBL (.txt)</button>
+    <button class="btn" onclick="deleteBonusRun(${i})" title="ลบงวดโบนัสนี้">ลบ</button></div>
     <div class="bd"><div class="cards">
       <div class="card"><div class="k">โบนัสรวม</div><div class="v num">${fmt(t.gross)}</div></div>
       <div class="card"><div class="k">ภาษีหัก ณ ที่จ่าย</div><div class="v num">${fmt(t.wht)}</div></div>
       <div class="card"><div class="k">ปกส. / PF</div><div class="v num">${fmt(t.sso)} / ${fmt(t.pf)}</div></div>
       <div class="card acc"><div class="k">โอนสุทธิ</div><div class="v num">${fmt(t.net)}</div></div></div>
-      <p class="sub">รอบจ่ายแยกจากเงินเดือน · ที่มา ${esc(b.source||'—')} · ${P.y===S.historyYear&&P.m<=S.historyThroughMonth?'ยอดจริงเดือนนี้รวมโบนัสอยู่แล้ว (ไม่บวกซ้ำในภาษี)':'รวมในยอดสะสมเพื่อคำนวณภาษี'}</p></div></div>`;}).join('');
+      <p class="sub">ที่มา ${esc(b.source||'—')} · ${inHist?'ยอดจริงเดือนนี้รวมโบนัสอยู่แล้ว (ไม่บวกซ้ำในภาษี)':'รวมในยอดสะสมเพื่อคำนวณภาษีเดือนนี้และเดือนถัดไป'}${draft?' · ภาษีคำนวณอัตโนมัติ = ภาษีทั้งปีที่เพิ่มขึ้นจากโบนัส (ช่องสีเหลือง = กำหนดเอง, ลบค่าเพื่อกลับเป็นอัตโนมัติ) · ปิดงวดก่อนส่งออกไฟล์ยื่น':''}</p>
+      <div class="tblwrap" style="max-height:46vh;overflow-y:auto"><table><thead><tr><th>รหัส</th><th>ชื่อ</th><th class="r">โบนัส</th><th class="r">ภาษี</th><th class="r">สุทธิ</th><th>บัญชี</th></tr></thead>
+        <tbody>${body}</tbody><tfoot><tr><td colspan="2">รวม ${t.R.length} คน</td><td class="r num">${fmt(t.gross)}</td><td class="r num">${fmt(t.wht)}</td><td class="r num">${fmt(t.net)}</td><td></td></tr></tfoot></table></div></div></div>`;}).join('');
 }
 function wireBonusPanel(el){el.querySelectorAll('input[data-bpay]').forEach(inp=>inp.addEventListener('change',()=>{
   const b=bonusRunsOf(P.y,P.m)[Number(inp.dataset.bpay)];if(b){b.payDate=inp.value;queueSave();}}));}
