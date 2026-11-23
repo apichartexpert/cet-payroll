@@ -665,6 +665,7 @@ function vRun(el){
   </tr></tfoot></table></div></div>
   ${gapM.size?`<div class="note warn">⚠ ยังไม่มีข้อมูลเดือน ${[...gapM].sort((a,b)=>a-b).map(g=>THMONTH[g-1]).join(', ')} ${P.y} — ปิดงวดหรือนำเข้ายอดจริงของเดือนนั้นก่อน ไม่เช่นนั้นภาษีทั้งปีจะคำนวณต่ำไป</div>`:''}
   <div class="note">เทียบกับเดือนก่อน: ยอดโอนเปลี่ยน ${changed} คน จาก ${t.count} คน — ผลต่างทุกบรรทัดควรอธิบายได้ด้วยรายการใน MPA หรือเอกสารประกอบ (<a href="#" onclick="go('mpa');return false">ดู MPA</a>)</div>
+  ${taxCalcPanel(t)}
   ${bonusRunsPanel()}
   <div class="panel"><div class="hd"><h3><span class="sn">5</span> ส่งออกไฟล์งวด ${THMONTH[P.m-1]} ${P.y}</h3>${locked?'':'<span class="chip a">ปิดงวดก่อนส่งออกไฟล์ยื่น</span>'}</div>
     <div class="bd exports">
@@ -1300,7 +1301,8 @@ function vDash(el){
       <td style="white-space:normal">${monthWhat(x)||'<span style="color:var(--muted)">ไม่มีข้อมูล</span>'}</td>
       <td class="r num">${x.people||''}</td><td class="r num">${x.people?fmt(x.gross):''}</td><td class="r num">${x.people?fmt(x.wht):''}</td><td class="r num">${x.net?fmt(x.net):''}</td>
       <td style="white-space:nowrap">${!x.empty?`<button class="btn sm" onclick="viewMonth(${y},${m})">ดูข้อมูล</button>`:''}
-        ${edit?`<button class="btn sm ${isW?'pri':''}" onclick="openMonth(${y},${m},'${lockedM?'run':'mpa'}')" title="${lockedM?'งวดนี้ปิดแล้ว — เปิดหน้าคำนวณเงินเดือน (กด เปิดงวดแก้ไข ถ้าต้องแก้)':x.inHist?'นำเข้าทะเบียนเดือนนี้ใหม่ (ยอดจริงจะถูกแทนที่)':'นำเข้า MPA / ทะเบียน แล้วสร้างงวด'}">ประมวลผล</button>`:''}
+        ${edit&&!lockedM&&!x.inHist?`<button class="btn sm" onclick="openMonth(${y},${m},'mpa')" title="ลากไฟล์ MPA / ทะเบียน / เอกสารของเดือนนี้">นำเข้า</button><button class="btn sm ${isW?'pri':''}" onclick="processMonth(${y},${m})" title="สร้างงวด (งวดก่อน + MPA) แล้วคำนวณเงินเดือนและภาษี">ประมวลผล</button>`
+          :edit?`<button class="btn sm" onclick="openMonth(${y},${m},'${lockedM?'run':'mpa'}')" title="${lockedM?'งวดนี้ปิดแล้ว — เปิดหน้าคำนวณเงินเดือน (กด เปิดงวดแก้ไข ถ้าต้องแก้)':'นำเข้าทะเบียนเดือนนี้ใหม่ (ยอดจริงจะถูกแทนที่)'}">${lockedM?'เปิดงวด':'นำเข้าใหม่'}</button>`:''}
         ${edit&&!x.empty?`<button class="btn sm" onclick="askDelMonth(${y},${m})">ลบ</button>`:''}</td></tr>`;}).join('');
   el.innerHTML=`
   <h2>ภาพรวมปี ${y}</h2>
@@ -1313,17 +1315,54 @@ function vDash(el){
   </div>
   <div class="panel" id="monthPanel"><div class="hd"><h3>ข้อมูลรายเดือน</h3>
     <label style="font-size:12px;color:var(--muted)">ปี <select onchange="MSUM_Y=Number(this.value);DELM=null;render()">${ys.map(v=>`<option ${v===y?'selected':''}>${v}</option>`).join('')}</select></label>
-    <span style="font-size:12px;color:var(--muted);margin-right:auto">คลิกชื่อเดือนเพื่อเลือกงวด · ดูข้อมูล = หน้าคำนวณเงินเดือน · ประมวลผล = นำเข้า MPA / ทะเบียน แล้วสร้างงวด</span></div>
+    <span style="font-size:12px;color:var(--muted);margin-right:auto">คลิกชื่อเดือนเพื่อเลือกงวด · นำเข้า = ลากไฟล์ MPA / ทะเบียน · ประมวลผล = สร้างงวด คำนวณเงินเดือนและภาษี</span></div>
     ${DELM&&DELM.y===y?delMonthBox():''}${VIEWM&&VIEWM.y===y?monthViewBox():''}
     <div class="tblwrap"><table><thead><tr><th>เดือน</th><th>มีข้อมูลอะไรบ้าง</th><th class="r">คน</th><th class="r">เงินได้รวม</th><th class="r">ภาษีหัก ณ ที่จ่าย</th><th class="r">โอนสุทธิ (เงินเดือน)</th><th></th></tr></thead>
     <tbody>${rows}</tbody></table></div>
     <div class="bd"><p class="sub">เงินได้รวมและภาษีรวมโบนัสแล้ว · ลบ = ลบงวด MPA เอกสาร โบนัส และยอดจริงของเดือนนั้น (ไม่ลบรายชื่อพนักงาน)</p></div></div>
   <div class="panel"><div class="hd"><h3>งวดที่เลือก: ${THMONTH[P.m-1]} ${P.y} ${locked?'<span class="chip g">ปิดงวดแล้ว</span>':run?'<span class="chip a">ฉบับร่าง</span>':'<span class="chip b">ยังไม่เริ่ม</span>'}</h3>
     ${W&&!(P.y===y&&P.m===W)?`<button class="btn" onclick="selMonth(${y},${W})">ไปงวดถัดไปที่ต้องทำ (${THMONTH[W-1]})</button>`:''}
-    <button class="btn" onclick="go('run')">ดูข้อมูล</button>${edit?`<button class="btn pri" onclick="go('mpa')">ประมวลผล: ลากไฟล์เดือนนี้มาวาง</button>`:''}</div>
+    <button class="btn" onclick="go('run')">ดูข้อมูล</button>${edit&&!locked?`<button class="btn" onclick="go('mpa')">นำเข้าไฟล์เดือนนี้</button><button class="btn pri" onclick="processMonth(${P.y},${P.m})">ประมวลผล + คำนวณภาษี</button>`:''}</div>
     <div class="bd">${stepperHtml()}</div></div>
   ${dashWarnings()}`;
 }
+/* ---------- tax calculation of the month: one line per person, like the CET "Tax calculation" sheet ---------- */
+let TAXOPEN=false;
+const HOW_TH={level:'ระดับคงที่',relevel:'คำนวณระดับใหม่',plug:'ปรับให้ครบทั้งปี',catchup:'เกลี่ยทั้งปี',std12:'÷ 12',ovr:'กำหนดเอง'};
+function taxCalcRows(t){
+  return t.rows.map(({e,r,c})=>{const d=c.detail||computeWHT(e,r||{},P.y,P.m).detail;
+    const ovr=r&&r.whtOverride!=null;
+    return{e,d,annReg:r2(d.annReg),annOther:r2(d.annOther),gross:r2(d.gross),expense:r2(d.expense),allow:r2(d.allow+d.donate),taxable:r2(d.taxableAll),
+      taxAll:r2(d.taxAll),ytd:r2(d.whtYTD),wht:r2(c.wht),left:r2(d.taxAll-d.whtYTD-c.wht),extra:r2(d.extra||0),how:ovr?'ovr':d.how,gaps:d.gaps||[]};});
+}
+function taxCalcPanel(t){
+  const R=taxCalcRows(t);const sum=k=>r2(R.reduce((s,x)=>s+x[k],0));const gapN=R.filter(x=>x.gaps.length).length;
+  const mPrev=P.m>1?THMONTH[P.m-2]:'';
+  const head=`<div class="panel" id="taxPanel"><div class="hd"><h3><span class="sn">4</span> คำนวณภาษี ${THMONTH[P.m-1]} ${P.y} · ${R.length} คน</h3>
+    <span style="font-size:12px;color:var(--muted);margin-right:auto">ภาษีทั้งปี ${fmt(sum('taxAll'))} · หักแล้ว ${fmt(sum('ytd'))} · <b>ภาษีเดือนนี้ ${fmt(sum('wht'))}</b> · คงเหลือถึง ธ.ค. ${fmt(sum('left'))}${gapN?` · <span class="chip a">ขาดข้อมูลเดือนก่อน ${gapN} คน</span>`:''}</span>
+    <button class="btn" onclick="exportTaxCalcXlsx()">ส่งออก (.xlsx)</button>
+    <button class="btn ${TAXOPEN?'':'pri'}" onclick="TAXOPEN=!TAXOPEN;render()">${TAXOPEN?'ซ่อนตาราง':'แสดงตารางคำนวณภาษี'}</button></div>`;
+  if(!TAXOPEN)return head+'</div>';
+  return head+`<div class="bd"><p class="sub">เงินได้ทั้งปี = ยอดจริง ม.ค.–${mPrev||'—'} + เดือนนี้ + ประมาณการเดือนที่เหลือตามเงินเดือนปัจจุบัน (รวมโบนัส) · ค่าใช้จ่าย 50% ไม่เกิน 100,000 · ลดหย่อนรวม ปกส. PF และเงินบริจาค · คลิกชื่อเพื่อดูรายเดือน</p></div>
+    <div class="tblwrap" style="max-height:60vh;overflow-y:auto"><table><thead><tr><th>รหัส</th><th>ชื่อ</th>
+      <th class="r">เงินได้ประจำทั้งปี</th><th class="r">ครั้งคราว / โบนัส</th><th class="r">หักค่าใช้จ่าย</th><th class="r">ลดหย่อน</th><th class="r">เงินได้สุทธิ</th>
+      <th class="r">ภาษีทั้งปี</th><th class="r">หักแล้ว ม.ค.–${mPrev?mPrev.slice(0,3)+'.':'—'}</th><th class="r">ภาษีเดือนนี้</th><th class="r">คงเหลือถึง ธ.ค.</th><th>วิธี</th></tr></thead>
+    <tbody>${R.map(x=>`<tr><td class="num">${esc(x.e.code)}</td><td class="name-cell"><a href="#" onclick="showBrk('${esc(x.e.code)}');return false">${esc(x.e.name)}</a>${x.gaps.length?` <span class="chip a" title="ยังไม่มีข้อมูลเดือน ${x.gaps.map(g=>THMONTH[g-1]).join(', ')}">ขาด ${x.gaps.length} เดือน</span>`:''}</td>
+      <td class="r num">${fmt(x.annReg)}</td><td class="r num">${x.annOther?fmt(x.annOther):''}</td><td class="r num">${fmt(x.expense)}</td><td class="r num">${fmt(x.allow)}</td><td class="r num">${fmt(x.taxable)}</td>
+      <td class="r num"><b>${fmt(x.taxAll)}</b></td><td class="r num">${fmt(x.ytd)}</td><td class="r num"><b>${fmt(x.wht)}</b>${x.extra?`<br><small style="color:var(--muted)">ส่วนเพิ่ม ${fmt(x.extra)}</small>`:''}</td>
+      <td class="r num" style="${x.left<-0.5?'color:var(--red,#c0392b)':''}">${fmt(x.left)}</td><td style="font-size:12px">${HOW_TH[x.how]||x.how||''}</td></tr>`).join('')}</tbody>
+    <tfoot><tr><td colspan="2">รวม</td>${['annReg','annOther','expense','allow','taxable','taxAll','ytd','wht','left'].map(k=>`<td class="r num">${fmt(sum(k))}</td>`).join('')}<td></td></tr></tfoot></table></div></div>`;
+}
+window.exportTaxCalcXlsx=function(){const t=runTotals();const R=taxCalcRows(t);
+  const aoa=[['Tax calculation '+THMONTH[P.m-1]+' '+P.y],[],['Code','Name','Annual regular income','One-off / bonus','Expense','Allowances','Taxable income','Annual tax','WHT to last month','WHT this month','Remaining to Dec','Method']];
+  for(const x of R)aoa.push([x.e.code,x.e.name,x.annReg,x.annOther,x.expense,x.allow,x.taxable,x.taxAll,x.ytd,x.wht,x.left,HOW_TH[x.how]||x.how||'']);
+  saveFile('CET '+ym(P.y,P.m).replace('-','')+' Tax calculation.xlsx',aoaToXlsx([{name:'Tax calculation',aoa,widths:[9,30,14,13,12,12,14,12,13,12,13,16]}]));};
+/* ประมวลผล from the year overview: build the run (previous month + this month's MPA if not applied yet) and show its tax calculation */
+window.processMonth=function(y,m){P={y,m};MSUM_Y=y;try{sessionStorage.setItem('cet.period',y+'-'+m);}catch(e){}
+  const run=getRun(true);let n=0;
+  if(run.status!=='locked'&&run.mpa&&!(run.mpaApplied&&run.mpaApplied.length))n=applyMpa(run,pkey());
+  TAXOPEN=true;queueSave();go('run');document.getElementById('taxPanel')?.scrollIntoView({block:'start'});
+  toast(`ประมวลผลงวด ${THMONTH[m-1]} ${y}${n?' · นำ MPA ไปใช้ '+n+' รายการ':''} — ตรวจตารางคำนวณภาษีแล้วกด ปิดงวด ✓`);};
 window.backupAll=function(){saveFile('cet-payroll-backup-'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(S,null,1));};
 let wipeArm=false;
 window.wipeAll=function(){if(!wipeArm){wipeArm=true;toast('กดอีกครั้งเพื่อยืนยันการล้างข้อมูลทั้งหมด');setTimeout(()=>wipeArm=false,4000);return;}
@@ -1583,7 +1622,7 @@ window.applyMpaNow=function(regen){
     if(edited&&!regenArm){regenArm=true;setTimeout(()=>regenArm=false,4000);toast(`กดอีกครั้งเพื่อยืนยัน — จะล้างการแก้ไขในงวดนี้ ${edited} แถวแล้วสร้างใหม่`);return;}
     regenArm=false;run.rows={};run.mpaApplied=[];
   }
-  const n=applyMpa(run,pkey());queueSave();go('run');
+  const n=applyMpa(run,pkey());TAXOPEN=true;queueSave();go('run');
   toast(regen?`สร้างงวด ${pkey()} ใหม่แล้ว: งวดก่อน + MPA ${n} การเปลี่ยนแปลง`:`นำ MPA ไปใช้แล้ว ${n} การเปลี่ยนแปลง`);
 };
 function handleMpaWorkbook(wb,fileName){
@@ -2030,7 +2069,7 @@ function stepState(){
   const reviewed=!!(run.mpa&&run.mpa.lines.every(L=>!L.include||L.code||(L.kind==='emp'&&L.action!=='C')));
   const generated=locked||!!(run.mpaApplied&&run.mpaApplied.length)||!!run.source;
   return[{n:1,t:'นำเข้าไฟล์',s:'MPA · เอกสาร · ทะเบียน',done:hasInput,v:'mpa'},{n:2,t:'ตรวจรายการ',s:'จับคู่พนักงาน/เอกสาร',done:reviewed,v:'mpa'},
-    {n:3,t:'สร้างงวด',s:'งวดก่อน + MPA',done:generated,v:'mpa'},{n:4,t:'ตรวจ & ปิดงวด',s:'ผลต่างกับเดือนก่อน',done:locked,v:'run'},{n:5,t:'ส่งออกไฟล์',s:'ทะเบียน · ภ.ง.ด.1 · สปส. · BBL · PEAK',done:false,v:'run'}];
+    {n:3,t:'สร้างงวด',s:'งวดก่อน + MPA',done:generated,v:'mpa'},{n:4,t:'คำนวณภาษี & ปิดงวด',s:'ตารางภาษี · ผลต่างเดือนก่อน',done:locked,v:'run'},{n:5,t:'ส่งออกไฟล์',s:'ทะเบียน · ภ.ง.ด.1 · สปส. · BBL · PEAK',done:false,v:'run'}];
 }
 function stepperHtml(){const st=stepState();const cur=st.findIndex(s=>!s.done);
   return `<div class="stepper">${st.map((s,i)=>`<button class="stp ${s.done?'done':''} ${i===cur?'cur':''}" onclick="go('${s.v}')"><span class="n">${s.done?'✓':s.n}</span><span><b>${s.t}</b><small>${s.s}</small></span></button>`).join('')}</div>`;}
