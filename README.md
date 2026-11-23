@@ -36,6 +36,7 @@ Run the tests with `python -m pytest server/tests`.
 3. **Generate** – this month = previous month's payroll + this month's MPA.
 4. **Check and close** – compare each person's net pay with the previous month, then close the period.
 5. **Export** – payroll register in the CET layout (`MMMYYYY` + `Tax calculationNN`), PND1 attachment (.xlsx / .txt), SSO 1-10 (.xlsx / .txt), BBL salary file (.txt), PEAK journal (.xlsx).
+6. **Bonus runs** – a bonus register (file or sheet name containing "Bonus", or a register with bonus but no salary) is saved as an extra pay run in its month and never replaces the salary run. Each bonus run has its own pay date and exports: bonus register, PND1 (.xlsx / .txt) and BBL file (`CET YYYYMM Bonus.txt`). Months already covered by imported actuals include the bonus there, so it is not counted twice in tax; for later months the bonus and its withholding go into the year-to-date tax.
 
 ## Calculation rules
 

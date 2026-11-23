@@ -252,7 +252,7 @@ function defaultState(){return {
       bank:{code:'111301',name:'ธนาคาร - บัญชีออมทรัพย์ (BBL)'}
     }},
   historyYear:2026,historyThroughMonth:0,
-  employees:[],runs:{}
+  employees:[],runs:{},bonusRuns:{}
 };}
 let S=defaultState();
 try{const raw=localStorage.getItem(LSKEY);if(raw){const p=JSON.parse(raw);S=Object.assign(defaultState(),p);
@@ -331,14 +331,15 @@ function lastEmployedMonth(emp,y){if(emp.resignYM){const[ry,rm]=emp.resignYM.spl
 function monthData(emp,y,m){
   const run=S.runs[ym(y,m)];
   const row=run&&run.rows[emp.code]&&!run.rows[emp.code].exclude?run.rows[emp.code]:null;
-  const fromRun=()=>{const sal=row.salaryOverride!=null?row.salaryOverride:emp.salary;const calc=calcRow(emp,row,y,m,false);
-    return{income:sal,other:oneOff(emp,row,y,m),wht:calc.wht,sso:calc.sso,pf:calc.pf,src:'run'};};
+  const fromRun=()=>{const sal=row.salaryOverride!=null?row.salaryOverride:emp.salary;const calc=calcRow(emp,row,y,m,false);const b=bonusFor(emp,y,m);
+    return{income:sal,other:r2(oneOff(emp,row,y,m)+b.inc),wht:r2(calc.wht+b.wht),sso:r2(calc.sso+b.sso),pf:r2(calc.pf+b.pf),src:'run'};};
   if(row&&run.status==='locked')return fromRun();
   if(y===S.historyYear&&emp.history2026&&m<=S.historyThroughMonth){
     const h=emp.history2026;const g=(o)=>o&&o[m]!=null?num(o[m]):(o&&o[String(m)]!=null?num(o[String(m)]):0);
     return{income:g(h.income),other:g(h.other),wht:g(h.wht),sso:g(h.ssf),pf:g(h.pf),src:'hist'};
   }
   if(row)return fromRun();
+  const b=bonusFor(emp,y,m);if(b.inc||b.wht)return{income:0,other:b.inc,wht:b.wht,sso:b.sso,pf:b.pf,src:'run'};
   return null;
 }
 function annualTax(emp,annReg,annOther,annSSO,annPF){
@@ -377,7 +378,9 @@ function computeWHT(emp,r,y,m){
       const cur=mm===m&&r;
       const sso=cur&&r.ssoOverride!=null?num(r.ssoOverride):inc>0?ssoOf(emp,inc):0;const pf=cur&&r.pfOverride!=null?num(r.pfOverride):inc>0?pfOf(emp,inc):0;
       annReg+=inc;annOther+=oth;annSSO+=sso;annPF+=pf;
-      months.push({m:mm,inc,oth,wht:null,src:mm===m?'cur':'proj'});
+      const bn=mm===m&&!histCovers(emp,y,m)?bonusFor(emp,y,m):null;
+      if(bn){annOther+=bn.inc;annSSO+=bn.sso;annPF+=bn.pf;whtYTD+=bn.wht;}
+      months.push({m:mm,inc,oth:bn?r2(oth+bn.inc):oth,wht:null,src:mm===m?'cur':'proj'});
     }
   }
   const all=annualTax(emp,annReg,annOther,annSSO,annPF);
@@ -677,6 +680,7 @@ function vRun(el){
   </tr></tfoot></table></div></div>
   ${gapM.size?`<div class="note warn">⚠ ยังไม่มีข้อมูลเดือน ${[...gapM].sort((a,b)=>a-b).map(g=>THMONTH[g-1]).join(', ')} ${P.y} — ปิดงวดหรือนำเข้ายอดจริงของเดือนนั้นก่อน ไม่เช่นนั้นภาษีทั้งปีจะคำนวณต่ำไป</div>`:''}
   <div class="note">เทียบกับเดือนก่อน: ยอดโอนเปลี่ยน ${changed} คน จาก ${t.count} คน — ผลต่างทุกบรรทัดควรอธิบายได้ด้วยรายการใน MPA หรือเอกสารประกอบ (<a href="#" onclick="go('mpa');return false">ดู MPA</a>)</div>
+  ${bonusRunsPanel()}
   <div class="panel"><div class="hd"><h3><span class="sn">5</span> ส่งออกไฟล์งวด ${THMONTH[P.m-1]} ${P.y}</h3>${locked?'':'<span class="chip a">ปิดงวดก่อนส่งออกไฟล์ยื่น</span>'}</div>
     <div class="bd exports">
       <button class="btn pri" onclick="exportRegisterXlsx()">ทะเบียนเงินเดือน + Tax calculation (.xlsx)</button>
@@ -689,6 +693,7 @@ function vRun(el){
     </div></div>
   <div class="note">แตะยอดภาษีของแต่ละคนเพื่อดูการกระจายรายเดือนและวิธีคำนวณ · พิมพ์ทับช่องภาษีไม่ได้ — ถ้าต้องการกำหนดภาษีเอง เปิดหน้าต่างวิธีคำนวณแล้วกด "กำหนดภาษีเอง"</div>`;
   document.getElementById('payDate')?.addEventListener('change',ev=>{getRun(true).payDate=ev.target.value;queueSave();});
+  wireBonusPanel(el);
   document.getElementById('pfErTotal')?.addEventListener('change',ev=>{const v=ev.target.value.trim();getRun(true).pfErTotal=v===''?null:num(v);queueSave();vRun(document.getElementById('view'));});
   el.querySelectorAll('input.cell').forEach(inp=>{
     inp.addEventListener('change',()=>{
@@ -874,6 +879,116 @@ function exportSsoTxt(){
     return[ssoIdOf(x.e),n.title,n.first,n.last,x.c.sal.toFixed(2),x.c.sso.toFixed(2)].join('|');}).join('\r\n');
   saveFile(`SSO1-10_${pkey()}_CET.txt`,txt);
 }
+
+/* ---------- bonus runs ----------
+   A bonus register (e.g. "04. Bonus_Apr2026_CET and CEST.xlsx") is an extra pay run inside a month. It is stored in
+   S.bonusRuns["YYYY-MM"] = [{id,label,payDate,source,rows:{code:{name,gross,wht,sso,pf,loan,oded,net,acct}}}] and never
+   touches the monthly salary run. For tax: months already covered by imported actuals (Tax calculation / data file)
+   include the bonus there; for other months the bonus run is added to that month's income and tax withheld. */
+const bonusRunsOf=(y,m)=>(S.bonusRuns&&S.bonusRuns[ym(y,m)])||[];
+const histCovers=(emp,y,m)=>y===S.historyYear&&!!emp.history2026&&m<=S.historyThroughMonth;
+function bonusFor(emp,y,m){let inc=0,wht=0,sso=0,pf=0;
+  for(const b of bonusRunsOf(y,m)){const x=b.rows[emp.code];if(x){inc+=num(x.gross);wht+=num(x.wht);sso+=num(x.sso);pf+=num(x.pf);}}
+  return{inc:r2(inc),wht:r2(wht),sso:r2(sso),pf:r2(pf)};}
+function isBonusRegister(p){
+  const R=p.reg.rows;
+  return /bonus/i.test(p.file||'')||/bonus/i.test(p.reg.sheet||'')||(R.length>0&&R.every(x=>!x.sal)&&R.some(x=>x.inc||x.oadd||x.ot));
+}
+/* gross bonus per row: bonus columns only, unless the net pay only ties when the remuneration column is counted too */
+function bonusGross(x){
+  const ded=x.wht+x.sso+x.pf+x.loan+x.oded;const a=r2(x.ot+x.inc+x.oadd),b=r2(x.sal+x.ot+x.inc+x.oadd);
+  if(a>0&&Math.abs(a-ded-x.net)<1)return a;if(Math.abs(b-ded-x.net)<1)return b;return a>0?a:b;
+}
+function bonusSummary(p){
+  const R=p.reg.rows.map(x=>Object.assign({},x,{gross:bonusGross(x)}));const sum=k=>r2(R.reduce((s,x)=>s+num(x[k]),0));
+  const known=new Set(S.employees.map(e=>e.code));const unknown=R.filter(x=>!x.code||!known.has(x.code));
+  const existing=bonusRunsOf(p.reg.y,p.reg.m);
+  let tcGross=null;const hasB=S.employees.some(e=>e.history2026&&e.history2026.otherB&&(e.history2026.otherB[p.reg.m]!=null||e.history2026.otherB[String(p.reg.m)]!=null));
+  if(hasB)tcGross=r2(S.employees.reduce((s,e)=>{const o=(e.history2026||{}).otherB||{};return s+num(o[p.reg.m]!=null?o[p.reg.m]:o[String(p.reg.m)]);},0));
+  return{rows:R,count:R.length,gross:sum('gross'),wht:sum('wht'),sso:sum('sso'),pf:sum('pf'),net:sum('net'),unknown,existing,tcGross,
+    inHist:p.reg.y===S.historyYear&&p.reg.m<=S.historyThroughMonth};
+}
+function applyBonus(p,mode){ // mode: 'replace' (the latest bonus run of the month) or 'add'
+  const{y,m}=p.reg;const key=ym(y,m);S.bonusRuns=S.bonusRuns||{};const list=S.bonusRuns[key]=S.bonusRuns[key]||[];
+  const s=bonusSummary(p);
+  let b=list.find(x=>x.source===p.file)||(mode==='replace'&&list.length?list[list.length-1]:null);
+  if(!b){b={id:'B'+Date.now().toString(36),label:'',payDate:null,source:p.file,rows:{}};list.push(b);}
+  b.label=list.length>1?'โบนัส รอบ '+(list.indexOf(b)+1):'โบนัส';b.source=p.file;b.sheet=p.reg.sheet;b.rows={};b.importedAt=new Date().toISOString();
+  for(const x of s.rows){if(!x.code||!S.employees.some(e=>e.code===x.code))continue;
+    b.rows[x.code]={name:x.name,gross:x.gross,wht:x.wht,sso:x.sso,pf:x.pf,loan:x.loan,oded:x.oded,net:x.net,acct:fmtAcct(x.acct)};}
+  queueSave();return{b,count:Object.keys(b.rows).length,skipped:s.unknown.map(x=>x.code||x.name)};
+}
+function bonusRegisterPanel(p){
+  const s=bonusSummary(p);const mn=THMONTH[p.reg.m-1];
+  return `<div class="panel"><div class="hd"><h3>ทะเบียนโบนัส ${mn} ${p.reg.y} · ${esc(p.file)}</h3>
+    <button class="btn" onclick="IMP.register=null;render()">ยกเลิก</button>
+    ${s.existing.length?`<button class="btn" onclick="confirmBonus('add')">เพิ่มเป็นอีกรอบ</button><button class="btn pri" onclick="confirmBonus('replace')">แทนที่รอบโบนัสเดิม</button>`
+      :`<button class="btn pri" onclick="confirmBonus('add')">บันทึกเป็นรอบโบนัสเดือน ${mn}</button>`}</div>
+  <div class="bd"><div class="cards">
+    <div class="card"><div class="k">พนักงาน</div><div class="v num">${s.count}</div></div>
+    <div class="card"><div class="k">โบนัสรวม</div><div class="v num">${fmt(s.gross)}</div>${s.tcGross!=null?`<div class="s">ตามชีต Tax calculation ${fmt(s.tcGross)}${Math.abs(s.tcGross-s.gross)<1?' ✓':''}</div>`:''}</div>
+    <div class="card"><div class="k">ภาษีหัก ณ ที่จ่าย</div><div class="v num">${fmt(s.wht)}</div></div>
+    <div class="card"><div class="k">ปกส. / PF</div><div class="v num">${fmt(s.sso)} / ${fmt(s.pf)}</div></div>
+    <div class="card acc"><div class="k">โอนสุทธิ</div><div class="v num">${fmt(s.net)}</div></div></div>
+    <p class="sub">บันทึกเป็น<b>รอบจ่ายเพิ่ม</b>ของเดือน ${mn} — รอบเงินเดือนปกติของเดือนนี้ไม่ถูกแก้ไข · ${s.inHist?`ยอดจริงเดือน ${mn} ที่นำเข้าไว้รวมโบนัสอยู่แล้ว จึงไม่บวกซ้ำในการคำนวณภาษี — รอบนี้ใช้เก็บรายละเอียดและส่งออกไฟล์โอน / ภ.ง.ด.1`:`โบนัสและภาษีของรอบนี้จะรวมในยอดสะสมเพื่อคำนวณภาษีเดือนถัดไป`}</p>
+    ${s.existing.length?`<div class="note warn">เดือนนี้มีรอบโบนัสอยู่แล้ว ${s.existing.length} รอบ (${s.existing.map(b=>esc(b.source||b.label)).join(', ')}) — ถ้าไฟล์นี้เป็นฉบับแก้ไขของรอบเดิม ให้กด "แทนที่รอบโบนัสเดิม" ไม่เช่นนั้นยอดจะนับซ้ำ</div>`:''}
+    ${s.unknown.length?`<div class="note warn">ไม่พบในรายชื่อพนักงาน ${s.unknown.length} คน จะไม่นำเข้า: ${s.unknown.slice(0,8).map(x=>esc(x.code||x.name)).join(', ')}</div>`:''}
+    <div class="tblwrap" style="max-height:40vh;overflow-y:auto"><table><thead><tr><th>รหัส</th><th>ชื่อ</th><th class="r">โบนัส</th><th class="r">ภาษี</th><th class="r">ปกส.</th><th class="r">PF</th><th class="r">สุทธิ</th></tr></thead><tbody>
+      ${s.rows.map(x=>`<tr><td class="num">${esc(x.code)}</td><td class="name-cell">${esc(x.name)}</td><td class="r num">${fmt(x.gross)}</td><td class="r num">${fmt(x.wht)}</td><td class="r num">${fmt(x.sso)}</td><td class="r num">${fmt(x.pf)}</td><td class="r num">${fmt(x.net)}</td></tr>`).join('')}
+    </tbody></table></div>
+  </div></div>`;
+}
+window.confirmBonus=function(mode){const p=IMP.register;if(!p)return;const r=applyBonus(p,mode);
+  const it=IMP.files.find(x=>x.kind==='register'&&x.status==='review');
+  if(it){it.status='done';it.kind='bonus';it.msg=`บันทึกเป็นรอบโบนัสงวด ${ym(p.reg.y,p.reg.m)} แล้ว · ${r.count} คน${r.skipped.length?' · ข้ามรหัสที่ไม่รู้จัก: '+r.skipped.join(', '):''}`;}
+  IMP.register=null;P={y:p.reg.y,m:p.reg.m};render();toast(`บันทึกรอบโบนัส ${THMONTH[p.reg.m-1]} ${p.reg.y} แล้ว — ดูได้ที่หน้า คำนวณเงินเดือน`);};
+function bonusTotals(b){const R=Object.entries(b.rows).map(([code,x])=>Object.assign({code,e:S.employees.find(e=>e.code===code)},x));
+  const sum=k=>r2(R.reduce((s,x)=>s+num(x[k]),0));return{R,gross:sum('gross'),wht:sum('wht'),sso:sum('sso'),pf:sum('pf'),loan:sum('loan'),net:sum('net')};}
+function bonusRunsPanel(){
+  const list=bonusRunsOf(P.y,P.m);if(!list.length)return '';
+  return list.map((b,i)=>{const t=bonusTotals(b);return `<div class="panel"><div class="hd"><h3>${esc(b.label||'โบนัส')} · ${THMONTH[P.m-1]} ${P.y} · ${t.R.length} คน</h3>
+    <label style="font-size:12px;color:var(--muted)">วันที่จ่าย <input type="date" data-bpay="${i}" value="${esc(b.payDate||defaultPayDate())}" style="margin-left:4px"></label>
+    <button class="btn" onclick="exportBonusXlsx(${i})">ทะเบียนโบนัส (.xlsx)</button>
+    <button class="btn" onclick="exportBonusPnd1(${i},'xlsx')">ภ.ง.ด.1 (.xlsx)</button>
+    <button class="btn" onclick="exportBonusPnd1(${i},'txt')">ภ.ง.ด.1 (.txt)</button>
+    <button class="btn pri" onclick="exportBonusBbl(${i})">ไฟล์โอน BBL (.txt)</button>
+    <button class="btn" onclick="deleteBonusRun(${i})" title="ลบรอบโบนัสนี้">ลบ</button></div>
+    <div class="bd"><div class="cards">
+      <div class="card"><div class="k">โบนัสรวม</div><div class="v num">${fmt(t.gross)}</div></div>
+      <div class="card"><div class="k">ภาษีหัก ณ ที่จ่าย</div><div class="v num">${fmt(t.wht)}</div></div>
+      <div class="card"><div class="k">ปกส. / PF</div><div class="v num">${fmt(t.sso)} / ${fmt(t.pf)}</div></div>
+      <div class="card acc"><div class="k">โอนสุทธิ</div><div class="v num">${fmt(t.net)}</div></div></div>
+      <p class="sub">รอบจ่ายแยกจากเงินเดือน · ที่มา ${esc(b.source||'—')} · ${P.y===S.historyYear&&P.m<=S.historyThroughMonth?'ยอดจริงเดือนนี้รวมโบนัสอยู่แล้ว (ไม่บวกซ้ำในภาษี)':'รวมในยอดสะสมเพื่อคำนวณภาษี'}</p></div></div>`;}).join('');
+}
+function wireBonusPanel(el){el.querySelectorAll('input[data-bpay]').forEach(inp=>inp.addEventListener('change',()=>{
+  const b=bonusRunsOf(P.y,P.m)[Number(inp.dataset.bpay)];if(b){b.payDate=inp.value;queueSave();}}));}
+window.deleteBonusRun=function(i){const list=bonusRunsOf(P.y,P.m);const b=list[i];if(!b)return;
+  if(!confirm(`ลบ ${b.label||'รอบโบนัส'} ของ ${THMONTH[P.m-1]} ${P.y} (${Object.keys(b.rows).length} คน)?`))return;
+  list.splice(i,1);queueSave();render();};
+function bonusPayDate(b){return b.payDate||defaultPayDate();}
+window.exportBonusXlsx=function(i){const b=bonusRunsOf(P.y,P.m)[i];if(!b)return;const t=bonusTotals(b);
+  const aoa=[[S.company.nameEN],['Bonus payroll — '+THMONTH[P.m-1]+' '+(P.y+543)+' · pay date '+bonusPayDate(b)],[],
+    ['No','Code','Employee Name','Bonus','Withholding Tax','Social Security','Provident Fund','Student Loan','Other','Net Pay','A/C']];
+  t.R.forEach((x,k)=>aoa.push([k+1,x.code,x.e?x.e.name:x.name,r2(x.gross),r2(x.wht),r2(x.sso),r2(x.pf),r2(x.loan),r2(x.oded),r2(x.net),digits(x.acct||(x.e&&x.e.bankAcct))]));
+  aoa.push(['','','Total',t.gross,t.wht,t.sso,t.pf,t.loan,r2(t.R.reduce((s,x)=>s+num(x.oded),0)),t.net,'']);
+  saveFile(`Bonus_${pkey()}_CET.xlsx`,aoaToXlsx([{name:'Bonus '+pkey(),aoa,widths:[5,9,32,14,14,12,12,12,10,14,13]}]));};
+window.exportBonusPnd1=function(i,kind){const b=bonusRunsOf(P.y,P.m)[i];if(!b)return;const t=bonusTotals(b);
+  const[yy,mm,dd]=bonusPayDate(b).split('-');const thDate=dd+'/'+mm+'/'+(Number(yy)+543);
+  const rows=t.R.filter(x=>x.gross>0).map((x,k)=>{const n=splitName(x.e?nameThOf(x.e):x.name);
+    return{seq:k+1,taxId:x.e?digits(x.e.taxId):'',title:n.title,first:n.first,last:n.last,date:thDate,income:r2(x.gross),tax:r2(x.wht)};});
+  if(kind==='txt'){saveFile(`PND1_${pkey()}_Bonus_CET.txt`,rows.map(r=>[r.seq,r.taxId,r.title,r.first,r.last,r.date,r.income.toFixed(2),r.tax.toFixed(2),1].join('|')).join('\r\n'));return;}
+  const aoa=[['ใบแนบ ภ.ง.ด.1 — เงินได้ตามมาตรา 40(1) (โบนัส)'],['ผู้มีหน้าที่หักภาษี',S.company.nameTH,'เลขผู้เสียภาษี',S.company.taxIdCo,'สาขา',S.company.branch],
+    ['เดือน/ปีภาษี',THMONTH[P.m-1]+' '+(P.y+543)],[],['ลำดับ','เลขประจำตัวผู้เสียภาษี','คำนำหน้า','ชื่อ','นามสกุล','วัน เดือน ปี ที่จ่าย','จำนวนเงินได้','ภาษีที่หักนำส่ง','เงื่อนไข']];
+  for(const r of rows)aoa.push([r.seq,r.taxId,r.title,r.first,r.last,r.date,r.income,r.tax,1]);
+  aoa.push(['','','','','','รวม',t.gross,t.wht,'']);
+  saveFile(`PND1_${pkey()}_Bonus_CET.xlsx`,aoaToXlsx([{name:'PND1 Bonus',aoa,widths:[6,16,8,16,20,14,14,14,7]}]));};
+window.exportBonusBbl=function(i){const b=bonusRunsOf(P.y,P.m)[i];if(!b)return;const t=bonusTotals(b);
+  if(digits(S.company.payBankAcct).length!==10){toast('ใส่เลขบัญชีจ่ายเงินเดือนของบริษัท (10 หลัก) ที่หน้า ตั้งค่า ก่อน');return;}
+  const lines=t.R.filter(x=>x.net>0.005&&!(x.e&&x.e.bankTransfer===false)).map(x=>({code:x.code,name:x.e?x.e.name:x.name,acct:digits(x.acct)||digits(x.e&&x.e.bankAcct),amount:r2(x.net)}));
+  const remit=r2(t.sso*2+t.loan);
+  if(S.company.remitAcct&&remit>0)lines.push({code:'SL/SSO',name:S.company.remitName||'SSO + กยศ. remittance',acct:S.company.remitAcct,amount:remit});
+  const bad=lines.filter(x=>digits(x.acct).length!==10);if(bad.length){toast('แก้เลขบัญชีก่อน: '+bad.map(x=>x.code).join(', '));return;}
+  saveFile(`CET ${P.y}${String(P.m).padStart(2,'0')} Bonus.txt`,bblTxt(lines,bonusPayDate(b)));};
 
 /* ---------- bank ---------- */
 /* lines in the BBL salary file: employees paid by file, plus the SSO + student-loan remittance line */
@@ -1405,9 +1520,9 @@ const sheetAoa=(wb,name)=>XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw
 const txt=v=>String(v==null?'':v).replace(/\s+/g,' ').trim();
 function registerSheets(wb){
   const out=[];
-  for(const name of wb.SheetNames){const m=name.trim().toUpperCase().match(/^([A-Z]{3,9})\s*(20\d\d)$/);if(!m)continue;
-    const mi=MON3.indexOf(m[1].slice(0,3));if(mi>=0)out.push({name,y:Number(m[2]),m:mi+1});}
-  return out.sort((a,b)=>(b.y*12+b.m)-(a.y*12+a.m));
+  for(const name of wb.SheetNames){const m=name.trim().toUpperCase().match(/^(BONUS[\s_-]*)?([A-Z]{3,9})[\s_-]*(20\d\d)([\s_-]*BONUS)?$/);if(!m)continue;
+    const mi=MON3.indexOf(m[2].slice(0,3));if(mi>=0)out.push({name,y:Number(m[3]),m:mi+1,bonus:!!(m[1]||m[4])});}
+  return out.sort((a,b)=>(b.y*12+b.m)-(a.y*12+a.m)||(b.bonus?1:0)-(a.bonus?1:0));
 }
 function findRegHeader(aoa){for(let i=0;i<Math.min(aoa.length,15);i++){const r=aoa[i]||[];if(txt(r[0]).toLowerCase()==='no'&&txt(r[1]).toLowerCase().includes('employee name'))return i;}return -1;}
 function isRegisterWorkbook(wb){const s=registerSheets(wb);return s.length>0&&findRegHeader(sheetAoa(wb,s[0].name))>=0;}
@@ -1470,7 +1585,7 @@ function parseTaxCalc(wb,y){
 function parseRegisterWorkbook(wb,fileName){
   const sh=registerSheets(wb)[0];const reg=parseRegisterSheet(wb,sh);const tc=parseTaxCalc(wb,sh.y);
   for(const r of reg.rows)if(!r.code){const t=tc&&Object.values(tc.people).find(p=>!p.code&&normName(p.name).split(' ')[0]===normName(r.name).split(' ')[0]);r.tcKey=t?'NAME:'+t.name:'';}
-  return{file:fileName,reg,tc};
+  const p={file:fileName,reg,tc};p.bonus=isBonusRegister(p);return p;
 }
 function registerSummary(p){
   const R=p.reg.rows;const sum=k=>r2(R.reduce((s,x)=>s+num(x[k]),0));
@@ -1671,7 +1786,7 @@ function exportRegisterXlsx(){
 }
 /* ---------- one import page: drop any file, the app works out what it is ---------- */
 const IMP={files:[],register:null};
-const KIND_LBL={mpa:'MPA',register:'ทะเบียนเงินเดือน',data:'ข้อมูลพนักงาน/ยอดสะสม',doc:'เอกสารประกอบ',bbl:'ไฟล์โอน BBL',legacy:'ทะเบียน (แบบย่อ)','?':'กำลังอ่าน'};
+const KIND_LBL={mpa:'MPA',register:'ทะเบียนเงินเดือน',bonus:'ทะเบียนโบนัส',data:'ข้อมูลพนักงาน/ยอดสะสม',doc:'เอกสารประกอบ',bbl:'ไฟล์โอน BBL',legacy:'ทะเบียน (แบบย่อ)','?':'กำลังอ่าน'};
 async function handleFiles(list){
   const files=[...list];if(!files.length)return;
   for(const f of files.filter(f=>/\.json$/i.test(f.name))){try{const o=JSON.parse(await f.text());
@@ -1708,7 +1823,8 @@ async function openWorkbookItem(it,pw){
         it.msg=`งวด ${parsed.period} · ${parsed.lines.length} รายการ · ตรวจในขั้นที่ 2 แล้วกด "สร้างงวด"`;queueSave();}
     }else if(isRegisterWorkbook(wb)){
       const p=parseRegisterWorkbook(wb,it.name);IMP.register=p;it.kind='register';it.status='review';
-      it.msg=`ชีต ${p.reg.sheet} · ${p.reg.rows.length} คน${p.tc?' · '+p.tc.sheet:''} · ตรวจยอดด้านล่างแล้วกด "บันทึกเป็นยอดจริง"`;
+      it.msg=p.bonus?`ทะเบียนโบนัส · ชีต ${p.reg.sheet} · ${p.reg.rows.length} คน · ตรวจยอดด้านล่างแล้วกด "บันทึกเป็นรอบโบนัส" (ไม่ทับรอบเงินเดือน)`
+        :`ชีต ${p.reg.sheet} · ${p.reg.rows.length} คน${p.tc?' · '+p.tc.sheet:''} · ตรวจยอดด้านล่างแล้วกด "บันทึกเป็นยอดจริง"`;
     }else{
       const r=importDataWorkbook(wb);
       if(r.empN||r.runN||r.histN||r.compN){it.kind='data';it.status='done';it.msg=`พนักงาน ${r.empN} · ยอดงวด ${r.runN} · ยอดจริง ${r.histN} รายการ${r.compN?' · ข้อมูลบริษัท '+r.compN+' ช่อง':''} (ถึงเดือน ${S.historyThroughMonth})`;queueSave();}
@@ -1763,7 +1879,7 @@ function stepState(){
 function stepperHtml(){const st=stepState();const cur=st.findIndex(s=>!s.done);
   return `<div class="stepper">${st.map((s,i)=>`<button class="stp ${s.done?'done':''} ${i===cur?'cur':''}" onclick="go('${s.v}')"><span class="n">${s.done?'✓':s.n}</span><span><b>${s.t}</b><small>${s.s}</small></span></button>`).join('')}</div>`;}
 function registerPanel(){
-  const p=IMP.register;if(!p)return '';const s=registerSummary(p);const k=ym(p.reg.y,p.reg.m);
+  const p=IMP.register;if(!p)return '';if(p.bonus)return bonusRegisterPanel(p);const s=registerSummary(p);const k=ym(p.reg.y,p.reg.m);
   return `<div class="panel"><div class="hd"><h3>ทะเบียนเงินเดือน ${THMONTH[p.reg.m-1]} ${p.reg.y} · ${esc(p.file)}</h3>
     <button class="btn" onclick="IMP.register=null;render()">ยกเลิก</button>
     <button class="btn pri" onclick="confirmRegister()">บันทึกเป็นยอดจริงเดือน ${THMONTH[p.reg.m-1]}</button></div>
