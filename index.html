@@ -1202,6 +1202,7 @@ function vSet(el){
       ${!SRV.on||(SRV.user&&SRV.user.role==='admin')?'<button class="btn warn" onclick="wipeAll()">ล้างข้อมูลทั้งหมด</button>':''}
     </div>
   </div></div>
+  ${monthSummaryPanel()}
   <div id="srvPanels"></div>`;
   srvPanels();
   el.querySelectorAll('[data-c]').forEach(i=>i.addEventListener('change',()=>{S.company[i.dataset.c]=i.value.trim();queueSave();}));
@@ -1209,6 +1210,88 @@ function vSet(el){
     S.settings[k]=(k==='whtMethod'||k==='whtRound')?i.value:num(i.value);queueSave();}));
   el.querySelectorAll('[data-ac]').forEach(i=>i.addEventListener('change',()=>{const[k,f]=i.dataset.ac.split('.');S.settings.accounts[k][f]=i.value.trim();queueSave();}));
 }
+/* ---------- data by month: what each month holds, delete one month ---------- */
+let MSUM_Y=null,DELM=null;
+const histVal=(H,k,m)=>{const o=H&&H[k];return o?(o[m]!=null?o[m]:o[String(m)]):undefined;};
+const HIST_ALL=['income','other','wht','ssf','pf','loan','oded','net','otherB','whtB'];
+function histHas(e,m){const H=e.history2026;return !!H&&HIST_ALL.some(k=>histVal(H,k,m)!=null);}
+/* after an import raises historyThroughMonth, take in the following months whose actuals are still stored */
+function extendThrough(){if(!S.historyYear)return;let t=S.historyThroughMonth||0;
+  while(t<12&&S.employees.some(e=>histHas(e,t+1)))t++;S.historyThroughMonth=t;}
+function canEditData(){return !SRV.on||(SRV.user&&SRV.user.role!=='viewer');}
+function monthInfo(y,m){
+  const k=ym(y,m);const run=S.runs[k];const bonus=bonusRunsOf(y,m);
+  const inHist=y===S.historyYear&&m<=(S.historyThroughMonth||0);
+  const histN=y===S.historyYear?S.employees.filter(e=>histHas(e,m)).length:0;
+  let people=0,gross=0,wht=0,net=0;
+  const draft=run&&run.status!=='locked'&&!inHist;
+  for(const e of S.employees){
+    if(draft){const row=run.rows[e.code];if(row&&row.exclude)continue;const bn=bonusFor(e,y,m);
+      if(!isEmployed(e,y,m)&&!bn.inc)continue;const c=isEmployed(e,y,m)?calcRow(e,row||{},y,m,false):{total:0,wht:0,net:0};
+      people++;gross+=c.total+bn.inc;wht+=c.wht+bn.wht;net+=c.net;continue;}
+    const d=monthData(e,y,m);if(!d)continue;const g=num(d.income)+num(d.other);
+    if(!(g||num(d.wht)))continue;people++;gross+=g;wht+=num(d.wht);
+    if(d.src==='hist')net+=num(histVal(e.history2026,'net',m));
+    else{const row=run&&run.rows[e.code];if(row&&!row.exclude)net+=calcRow(e,row,y,m,false).net;}}
+  const bt=bonus.map(bonusTotals);
+  return{k,run,bonus,inHist,histN,people,gross:r2(gross),wht:r2(wht),net:r2(net),
+    bGross:r2(bt.reduce((s,t)=>s+t.gross,0)),bNet:r2(bt.reduce((s,t)=>s+t.net,0)),
+    mpa:run&&run.mpa,docs:(run&&run.docs||[]).length,
+    rowsN:run?Object.values(run.rows||{}).filter(r=>!r.exclude).length:0,
+    empty:!run&&!bonus.length&&!histN};
+}
+function monthSummaryPanel(){
+  const years=new Set([P.y]);if(S.historyYear)years.add(S.historyYear);
+  for(const k of Object.keys(S.runs||{}).concat(Object.keys(S.bonusRuns||{})))years.add(Number(k.slice(0,4)));
+  const ys=[...years].filter(Boolean).sort((a,b)=>b-a);const y=ys.includes(MSUM_Y)?MSUM_Y:(ys.includes(S.historyYear)?S.historyYear:ys[0]);
+  const edit=canEditData();
+  const rows=[];
+  for(let m=1;m<=12;m++){const I=monthInfo(y,m);
+    const what=[];
+    if(I.inHist)what.push(`<span class="chip g">ยอดจริง ${I.histN} คน</span>`);
+    else if(I.histN)what.push(`<span class="chip a" title="มียอดจริงเก็บไว้ แต่ยังไม่ได้ใช้ เพราะเดือนก่อนหน้ายังไม่มียอดจริงครบ">ยอดจริงเก็บไว้ ${I.histN} คน (ยังไม่ใช้)</span>`);
+    if(I.run)what.push(I.run.status==='locked'?`<span class="chip g">งวดปิดแล้ว${I.run.source?' · ทะเบียน '+esc(I.run.source):''}</span>`:`<span class="chip a">งวดฉบับร่าง (ยังไม่ปิด)</span>`);
+    if(I.mpa)what.push(`<span class="chip b">MPA ${esc(I.mpa.file||'')} · ${(I.mpa.lines||[]).length} รายการ</span>`);
+    if(I.docs)what.push(`<span class="chip b">เอกสาร ${I.docs} ไฟล์</span>`);
+    if(I.bonus.length)what.push(`<span class="chip b">โบนัส ${I.bonus.length} รอบ · ${fmt(I.bGross)}</span>`);
+    const sel=DELM&&DELM.y===y&&DELM.m===m;
+    rows.push(`<tr${sel?' style="background:var(--warn-bg,#fff4e5)"':''}><td><a href="#" onclick="gotoPeriod('${I.k}');go('run');return false">${THMONTH[m-1]}</a></td>
+      <td style="white-space:normal">${what.join(' ')||'<span style="color:var(--muted)">ไม่มีข้อมูล</span>'}</td>
+      <td class="r num">${I.people||''}</td><td class="r num">${I.people?fmt(I.gross):''}</td><td class="r num">${I.people?fmt(I.wht):''}</td><td class="r num">${I.net?fmt(I.net):''}</td>
+      <td>${edit&&!I.empty?`<button class="btn sm" onclick="askDelMonth(${y},${m})">ลบข้อมูลเดือนนี้</button>`:''}</td></tr>`);}
+  return `<div class="panel" id="monthPanel"><div class="hd"><h3>ข้อมูลรายเดือน</h3>
+    <label style="font-size:12px;color:var(--muted)">ปี <select onchange="MSUM_Y=Number(this.value);DELM=null;render()">${ys.map(v=>`<option ${v===y?'selected':''}>${v}</option>`).join('')}</select></label>
+    <span style="font-size:12px;color:var(--muted);margin-right:auto">ยอดจริงที่ใช้คำนวณภาษี: ${S.historyYear===y&&S.historyThroughMonth?'ม.ค.–'+THMONTH[S.historyThroughMonth-1]+' '+y:'ยังไม่มี'}</span></div>
+    ${DELM&&DELM.y===y?delMonthBox():''}
+    <div class="tblwrap"><table><thead><tr><th>เดือน</th><th>มีข้อมูลอะไรบ้าง</th><th class="r">คน</th><th class="r">เงินได้รวม</th><th class="r">ภาษีหัก ณ ที่จ่าย</th><th class="r">โอนสุทธิ (เงินเดือน)</th><th></th></tr></thead>
+    <tbody>${rows.join('')}</tbody></table></div>
+    <div class="bd"><p class="sub">เงินได้รวมและภาษีรวมโบนัสที่ใช้คำนวณภาษีแล้ว · คลิกชื่อเดือนเพื่อเปิดหน้าคำนวณเงินเดือน · การลบไม่ลบรายชื่อพนักงาน</p></div></div>`;
+}
+function delMonthBox(){
+  const{y,m}=DELM;const I=monthInfo(y,m);const mn=THMONTH[m-1]+' '+y;const thr=S.historyThroughMonth||0;
+  const items=[];
+  if(I.run)items.push(`งวดเงินเดือน (${I.run.status==='locked'?'ปิดแล้ว':'ฉบับร่าง'}${I.run.source?' · ทะเบียน '+esc(I.run.source):''}, ${I.people} คน)`);
+  if(I.mpa)items.push(`MPA ${esc(I.mpa.file||'')} (${(I.mpa.lines||[]).length} รายการ)`);
+  if(I.docs)items.push(`รายชื่อเอกสารประกอบ ${I.docs} ไฟล์`);
+  if(I.bonus.length)items.push(`งวดโบนัส ${I.bonus.length} รอบ (${fmt(I.bGross)})`);
+  if(I.histN)items.push(`ยอดจริงเดือน ${THMONTH[m-1]} ของพนักงาน ${I.histN} คน`);
+  const cut=y===S.historyYear&&m<=thr;
+  return `<div class="bd"><div class="note warn"><b>ลบข้อมูลเดือน ${mn}?</b>
+    <ul style="margin:6px 0">${items.map(x=>'<li>'+x+'</li>').join('')}</ul>
+    ${cut?`<p>ยอดจริงที่ใช้คำนวณภาษีจะเหลือ ${m>1?'ม.ค.–'+THMONTH[m-2]:'ไม่มี'}${m<thr?` · ยอดจริงเดือน ${THMONTH[m]}${thr-1>m?'–'+THMONTH[thr-1]:''} ยังเก็บไว้ แต่จะไม่ถูกใช้จนกว่าจะนำเข้าเดือน ${THMONTH[m-1]} ใหม่`:''}</p>`:''}
+    <p>ภาษีของเดือนหลังจากนี้จะคำนวณใหม่ และระบบจะเตือนว่าขาดข้อมูลเดือน ${THMONTH[m-1]} จนกว่าจะนำเข้าหรือปิดงวดใหม่ · รายชื่อและข้อมูลพนักงานไม่ถูกลบ · ลบแล้วย้อนกลับไม่ได้ (ยกเว้นกู้คืนจากไฟล์สำรอง)</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+      <button class="btn" onclick="backupAll()">สำรองข้อมูลก่อน (.json)</button>
+      <button class="btn" onclick="DELM=null;render()">ยกเลิก</button>
+      <button class="btn warn" onclick="doDelMonth()">ยืนยันลบข้อมูลเดือน ${mn}</button></div></div></div>`;
+}
+window.askDelMonth=function(y,m){if(!canEditData())return;DELM={y,m};MSUM_Y=y;render();document.getElementById('monthPanel')?.scrollIntoView({block:'start'});};
+window.doDelMonth=function(){if(!DELM||!canEditData())return;const{y,m}=DELM;const k=ym(y,m);
+  delete S.runs[k];if(S.bonusRuns)delete S.bonusRuns[k];
+  let h=0;if(y===S.historyYear)for(const e of S.employees){const H=e.history2026;if(!H||!histHas(e,m))continue;
+    for(const kk of Object.keys(H)){const o=H[kk];if(o&&typeof o==='object'){delete o[m];delete o[String(m)];}}h++;}
+  if(y===S.historyYear&&m<=(S.historyThroughMonth||0))S.historyThroughMonth=m-1;
+  DELM=null;queueSave();render();toast(`ลบข้อมูลเดือน ${THMONTH[m-1]} ${y} แล้ว${h?' · ยอดจริง '+h+' คน':''}`);};
 window.backupAll=function(){saveFile('cet-payroll-backup-'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(S,null,1));};
 let wipeArm=false;
 window.wipeAll=function(){if(!wipeArm){wipeArm=true;toast('กดอีกครั้งเพื่อยืนยันการล้างข้อมูลทั้งหมด');setTimeout(()=>wipeArm=false,4000);return;}
@@ -1677,7 +1760,7 @@ function applyRegister(p){
   for(const e of S.employees)if(!touched.has(e.code)&&isEmployed(e,y,m))run.rows[e.code]=Object.assign(blankRow(),{exclude:true});
   S.runs[key]=run;
   if(m>S.historyThroughMonth)S.historyThroughMonth=m;
-  queueSave();
+  extendThrough();queueSave();
   return{added,count:rows.length,left};
 }
 
@@ -2125,7 +2208,7 @@ function importHistSheet(aoa,hdr,year){
     maxM=Math.max(maxM,m);n++;
   }
   if(maxM>S.historyThroughMonth)S.historyThroughMonth=maxM;
-  return n;
+  extendThrough();return n;
 }
 function importLegacyRegister(best){
   const run=getRun(true);let n=0;
